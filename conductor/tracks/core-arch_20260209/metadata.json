@@ -1,0 +1,16 @@
+{
+  "track_id": "core-arch_20260209",
+  "title": "Core Plugin Architecture - Restructure and Extend",
+  "status": "planned",
+  "created": "2026-02-10",
+  "branch": "track/core-arch_20260209",
+  "project_type": "brownfield",
+  "estimated_hours": "8-12",
+  "phases": 6,
+  "tasks": 30,
+  "priority": "P0",
+  "dependencies": [],
+  "spec": "conductor/tracks/core-arch_20260209/spec.md",
+  "plan": "conductor/tracks/core-arch_20260209/plan.md",
+  "description": "Transform the cljs-playground prototype into a production-ready logseq-ai-hub modular architecture with namespace migration, error handling foundation, placeholder modules for messaging/memory/tasks, expanded settings, and testing infrastructure."
+}
