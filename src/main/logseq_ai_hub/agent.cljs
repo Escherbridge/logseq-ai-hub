@@ -1,4 +1,4 @@
-(ns cljs-playground.agent
+(ns logseq-ai-hub.agent
   (:require [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
@@ -84,4 +84,3 @@
 (register-model "mock-model" echo-handler)
 (register-model "reverse-model" reverse-handler)
 (register-model "openai-model" openai-handler)
-

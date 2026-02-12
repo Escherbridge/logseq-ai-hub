@@ -13,7 +13,11 @@
  {:app
   {:target :browser
    :output-dir "./"
-   :modules {:main {:init-fn cljs-playground.core/init}}
-   }}
+   :modules {:main {:init-fn logseq-ai-hub.core/init}}
+   }
+
+  :node-test {:target :node-test
+              :output-to "out/test/node-tests.js"
+              :ns-regexp ".*-test$"}}
 
  }

@@ -1,5 +1,5 @@
-(ns cljs-playground.core
-  (:require [cljs-playground.agent :as agent]))
+(ns logseq-ai-hub.core
+  (:require [logseq-ai-hub.agent :as agent]))
 
 (def settings-schema
   [{:key "openAIKey"
@@ -38,7 +38,7 @@
         (.catch js/console.error))))
 
 (defn main []
-  (js/console.log "Loaded Logseq LLM Plugin")
+  (js/console.log "Loaded Logseq AI Hub Plugin")
   (js/logseq.useSettingsSchema (clj->js settings-schema))
   (js/logseq.Editor.registerSlashCommand "LLM" handle-llm-command))
 
