@@ -1,6 +1,14 @@
 import type { Config } from "./config";
 import type { Database } from "bun:sqlite";
 import { handleHealth } from "./routes/health";
+import {
+  handleWhatsAppVerify,
+  handleWhatsAppWebhook,
+} from "./routes/webhooks/whatsapp";
+import { handleTelegramWebhook } from "./routes/webhooks/telegram";
+import { handleSSE } from "./routes/events";
+import { handleSendMessage } from "./routes/api/send";
+import { handleGetMessages } from "./routes/api/messages";
 
 export interface RouteContext {
   config: Config;
@@ -31,6 +39,18 @@ export function createRouter(ctx: RouteContext) {
     // Route matching
     if (method === "GET" && pathname === "/health") {
       response = handleHealth(req, ctx.config);
+    } else if (method === "GET" && pathname === "/webhook/whatsapp") {
+      response = handleWhatsAppVerify(req, ctx.config);
+    } else if (method === "POST" && pathname === "/webhook/whatsapp") {
+      response = await handleWhatsAppWebhook(req, ctx.config, ctx.db);
+    } else if (method === "POST" && pathname === "/webhook/telegram") {
+      response = await handleTelegramWebhook(req, ctx.config, ctx.db);
+    } else if (method === "GET" && pathname === "/events") {
+      response = handleSSE(req, ctx.config);
+    } else if (method === "POST" && pathname === "/api/send") {
+      response = await handleSendMessage(req, ctx.config, ctx.db);
+    } else if (method === "GET" && pathname === "/api/messages") {
+      response = handleGetMessages(req, ctx.config, ctx.db);
     } else {
       response = Response.json({ error: "Not found" }, { status: 404 });
     }
