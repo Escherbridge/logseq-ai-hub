@@ -35,3 +35,4 @@ out/
 server/node_modules/
 server/data/
 server/bun.lockb
+server/.env
