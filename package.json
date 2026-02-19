@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "main": "index.html",
-  "author": "Tienson Qin",
+  "author": "Ahmed Zaher (Jade Oni) with Claude Code Opus 4.6",
   "license": "MIT",
   "devDependencies": {
     "shadow-cljs": "2.16.2"

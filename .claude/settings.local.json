@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:shadow-cljs.github.io)",
+      "WebFetch(domain:core.telegram.org)",
+      "WebFetch(domain:macchiato-framework.github.io)",
+      "WebFetch(domain:dev.solita.fi)",
+      "Bash(git commit:*)",
+      "Bash(bun test:*)",
+      "Bash(npx shadow-cljs:*)",
+      "Bash(npx clojure-lsp:*)",
+      "Bash(bun run dev)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(PORT=3001 bun run dev:*)",
+      "Bash(yarn release)",
+      "WebFetch(domain:logseq.github.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:unpkg.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:deepwiki.com)"
+    ]
+  }
+}

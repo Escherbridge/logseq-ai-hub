@@ -44,8 +44,8 @@
     :type "enum"
     :title "Select Model"
     :description "Choose which model to use for the /LLM command."
-    :enum-choices ["mock-model" "reverse-model" "openai-model"]
-    :default "mock-model"}])
+    :enum-choices ["openai-model" "mock-model" "reverse-model"]
+    :default "openai-model"}])
 
 (defn handle-llm-command [e]
   (let [block-uuid (.-uuid e)
