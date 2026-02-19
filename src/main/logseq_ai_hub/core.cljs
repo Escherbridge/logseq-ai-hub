@@ -1,8 +1,31 @@
 (ns logseq-ai-hub.core
-  (:require [logseq-ai-hub.agent :as agent]))
+  (:require [logseq-ai-hub.agent :as agent]
+            [logseq-ai-hub.messaging :as messaging]
+            [logseq-ai-hub.memory :as memory]
+            [logseq-ai-hub.tasks :as tasks]))
 
 (def settings-schema
-  [{:key "openAIKey"
+  [{:key "webhookServerUrl"
+    :type "string"
+    :title "Webhook Server URL"
+    :description "URL of your AI Hub webhook server (e.g. https://your-app.railway.app)"
+    :default ""}
+   {:key "pluginApiToken"
+    :type "string"
+    :title "Plugin API Token"
+    :description "Shared secret token for authenticating with the webhook server."
+    :default ""}
+   {:key "memoryEnabled"
+    :type "boolean"
+    :title "Enable AI Memory"
+    :description "Enable the AI memory system for storing and retrieving memories."
+    :default false}
+   {:key "memoryPagePrefix"
+    :type "string"
+    :title "Memory Page Prefix"
+    :description "Prefix for memory pages in Logseq (e.g. AI-Memory/)."
+    :default "AI-Memory/"}
+   {:key "openAIKey"
     :type "string"
     :title "OpenAI API Key"
     :description "Enter your OpenAI API Key here."
@@ -40,7 +63,10 @@
 (defn main []
   (js/console.log "Loaded Logseq AI Hub Plugin")
   (js/logseq.useSettingsSchema (clj->js settings-schema))
-  (js/logseq.Editor.registerSlashCommand "LLM" handle-llm-command))
+  (js/logseq.Editor.registerSlashCommand "LLM" handle-llm-command)
+  (messaging/init!)
+  (memory/init!)
+  (tasks/init!))
 
 (defn init []
   (-> (js/logseq.ready main)
