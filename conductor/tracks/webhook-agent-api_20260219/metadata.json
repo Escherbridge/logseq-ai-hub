@@ -1,0 +1,7 @@
+{
+  "id": "webhook-agent-api_20260219",
+  "description": "Webhook Server Agent Interaction Layer - REST API for remote job management, skills discovery, MCP connectors, and conversational agent interface",
+  "type": "feature",
+  "created_at": "2026-02-19T00:00:00Z",
+  "status": "pending"
+}
