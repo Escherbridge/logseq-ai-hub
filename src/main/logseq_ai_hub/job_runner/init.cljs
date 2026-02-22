@@ -5,6 +5,7 @@
             [logseq-ai-hub.job-runner.engine :as engine]
             [logseq-ai-hub.job-runner.executor :as executor]
             [logseq-ai-hub.job-runner.graph :as graph]
+            [logseq-ai-hub.job-runner.queue :as queue]
             [logseq-ai-hub.job-runner.mcp.client :as mcp-client]
             [logseq-ai-hub.job-runner.openclaw :as openclaw]
             [logseq-ai-hub.job-runner.commands :as commands]
@@ -71,8 +72,12 @@
                       :append-job-log! graph/append-job-log!}
               :engine {:execute-skill engine/execute-skill
                        :execute-skill-with-retries engine/execute-skill-with-retries}
-              :queue {:enqueue (fn [job-id] (js/Promise.resolve job-id))
-                      :dequeue (fn [] (js/Promise.resolve nil))}}]
+              :queue {:make-queue queue/make-queue
+                      :enqueue queue/enqueue
+                      :dequeue queue/dequeue
+                      :remove-from-queue queue/remove-from-queue
+                      :queue-size queue/queue-size
+                      :find-in-queue queue/find-in-queue}}]
     (runner/init-runner! deps)
     (js/console.log "Job runner: Runner initialized with dependencies")))
 

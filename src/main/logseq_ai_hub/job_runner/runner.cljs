@@ -155,10 +155,8 @@
   [job-id]
   (let [start-time (js/Date.)
         start-iso (.toISOString start-time)]
-    (-> (js/Promise.all
-         #js [(graph-read-job-page job-id)
-              (graph-read-job-page job-id)])  ;; Read once to get skill name
-        (.then (fn [[job-def _]]
+    (-> (graph-read-job-page job-id)
+        (.then (fn [job-def]
                  (if-not job-def
                    (js/Promise.reject
                     (errors/make-error :job-not-found

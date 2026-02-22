@@ -130,8 +130,8 @@
      :send! (fn [message]
               (js/Promise.
                (fn [resolve reject]
-                 (when-not @post-url
-                   (reject (js/Error. "SSE transport not connected - call connect! first")))
+                 (if-not @post-url
+                   (reject (js/Error. "SSE transport not connected - call connect! first"))
 
                  (let [request-id (:id message)
                        headers (cond-> {"Content-Type" "application/json"}
@@ -151,7 +151,7 @@
                                  (reject (errors/make-error
                                           :mcp-transport-error
                                           (str "SSE POST error: " (.-message err))
-                                          {:url @post-url :error err})))))))))
+                                          {:url @post-url :error err}))))))))))
      :close! (fn []
                (when @event-source
                  (.close @event-source)
