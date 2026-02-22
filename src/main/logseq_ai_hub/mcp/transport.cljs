@@ -1,6 +1,6 @@
-(ns logseq-ai-hub.job-runner.mcp.transport
+(ns logseq-ai-hub.mcp.transport
   "MCP transport implementations: Streamable HTTP and SSE."
-  (:require [logseq-ai-hub.job-runner.mcp.protocol :as protocol]
+  (:require [logseq-ai-hub.mcp.protocol :as protocol]
             [logseq-ai-hub.util.errors :as errors]))
 
 (defn- parse-sse-stream
@@ -161,13 +161,13 @@
   "Auto-detects and creates the appropriate transport based on config.
 
    Config map:
-   - :transport (optional) - :streamable-http or :sse
+   - :transport-type (optional) - :streamable-http or :sse
    - :url - endpoint URL
    - :auth-token (optional) - bearer token
 
    Defaults to :streamable-http if not specified."
   [config]
-  (case (:transport config)
+  (case (:transport-type config)
     :streamable-http (make-http-transport (:url config) (:auth-token config))
     :sse (make-sse-transport (:url config) (:auth-token config))
     ;; Default to streamable HTTP

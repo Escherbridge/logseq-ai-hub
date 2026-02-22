@@ -1,7 +1,7 @@
-(ns logseq-ai-hub.job-runner.mcp.client-test
+(ns logseq-ai-hub.mcp.client-test
   (:require [cljs.test :refer-macros [deftest is testing async]]
-            [logseq-ai-hub.job-runner.mcp.client :as client]
-            [logseq-ai-hub.job-runner.mcp.protocol :as protocol]))
+            [logseq-ai-hub.mcp.client :as client]
+            [logseq-ai-hub.mcp.protocol :as protocol]))
 
 ;; Mock transport factory
 (defn make-mock-transport

@@ -26,7 +26,10 @@
      :server-url nil
      :api-token nil
      :connected? false
-     :message-handlers []})
+     :message-handlers []
+     :intentional-disconnect? false
+     :reconnect-attempt 0
+     :reconnect-timer nil})
 
   ;; Mock EventSource constructor — returns a plain JS object.
   ;; When `new F()` returns an object, JS uses that object instead of `this`.

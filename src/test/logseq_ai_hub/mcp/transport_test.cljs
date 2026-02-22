@@ -1,7 +1,7 @@
-(ns logseq-ai-hub.job-runner.mcp.transport-test
+(ns logseq-ai-hub.mcp.transport-test
   (:require [cljs.test :refer-macros [deftest is testing async]]
-            [logseq-ai-hub.job-runner.mcp.transport :as transport]
-            [logseq-ai-hub.job-runner.mcp.protocol :as protocol]))
+            [logseq-ai-hub.mcp.transport :as transport]
+            [logseq-ai-hub.mcp.protocol :as protocol]))
 
 ;; Mock helpers
 (defn mock-fetch-json-response

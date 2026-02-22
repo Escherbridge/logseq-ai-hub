@@ -1,6 +1,6 @@
-(ns logseq-ai-hub.job-runner.mcp.protocol-test
+(ns logseq-ai-hub.mcp.protocol-test
   (:require [cljs.test :refer-macros [deftest is testing async]]
-            [logseq-ai-hub.job-runner.mcp.protocol :as protocol]))
+            [logseq-ai-hub.mcp.protocol :as protocol]))
 
 (deftest request-id-test
   (testing "request-id! generates unique sequential IDs"

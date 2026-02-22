@@ -1,7 +1,7 @@
-(ns logseq-ai-hub.job-runner.mcp.client
+(ns logseq-ai-hub.mcp.client
   "MCP client connection manager with auto-reconnect and operation handling."
-  (:require [logseq-ai-hub.job-runner.mcp.protocol :as protocol]
-            [logseq-ai-hub.job-runner.mcp.transport :as transport]
+  (:require [logseq-ai-hub.mcp.protocol :as protocol]
+            [logseq-ai-hub.mcp.transport :as transport]
             [logseq-ai-hub.util.errors :as errors]))
 
 (defonce servers (atom {}))

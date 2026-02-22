@@ -16,6 +16,13 @@
 (defn- current-iso-timestamp []
   (.toISOString (js/Date.)))
 
+(defn escape-datalog-string
+  "Escapes special characters for safe interpolation into Datalog query strings."
+  [s]
+  (-> s
+      (str/replace "\\" "\\\\")
+      (str/replace "\"" "\\\"")))
+
 (defn memory-page-name
   "Returns the Logseq page name for a given memory tag."
   [prefix tag]
@@ -84,8 +91,8 @@
                           [?b :block/content ?content]
                           [?b :block/page ?p]
                           [?p :block/name ?page-name]
-                          [(clojure.string/includes? ?content \"" query-str "\")]
-                          [(clojure.string/starts-with? ?page-name \"" (str/lower-case page-prefix) "\")]]")]
+                          [(clojure.string/includes? ?content \"" (escape-datalog-string query-str) "\")]
+                          [(clojure.string/starts-with? ?page-name \"" (escape-datalog-string (str/lower-case page-prefix)) "\")]]")]
           (-> (js/logseq.DB.datascriptQuery query)
               (.then (fn [results]
                        (if results
@@ -112,7 +119,7 @@
       (let [query (str "[:find (pull ?p [:block/name])
                         :where
                         [?p :block/name ?name]
-                        [(clojure.string/starts-with? ?name \"" (str/lower-case page-prefix) "\")]]")]
+                        [(clojure.string/starts-with? ?name \"" (escape-datalog-string (str/lower-case page-prefix)) "\")]]")]
         (-> (js/logseq.DB.datascriptQuery query)
             (.then (fn [results]
                      (if results
@@ -134,45 +141,101 @@
 ;; Slash Commands
 ;; ---------------------------------------------------------------------------
 
-(defn- handle-store-command [e]
+(defn handle-store-command
+  "Slash command handler for storing memories.
+   First line of block = tag (page name), remaining lines = content.
+   Single line stores to 'inbox' as default tag."
+  [e]
   (let [block-uuid (.-uuid e)]
     (-> (js/logseq.Editor.getBlock block-uuid)
         (.then (fn [block]
-                 (let [content (.-content block)]
-                   ;; Extract tag and content from user input
-                   ;; Expected format: "tag: content"
-                   (if-let [[_ tag memory-content] (re-matches #"(?i)^(\S+):\s*(.+)$" (str/trim content))]
-                     (-> (store-memory! tag memory-content)
-                         (.then (fn [_]
-                                  (js/logseq.App.showMsg "Memory stored successfully!" :success)))
-                         (.catch (fn [err]
-                                   (js/logseq.App.showMsg (str "Error: " (.-message err)) :error))))
-                     (js/logseq.App.showMsg "Format: tag: content" :warning)))))
+                 (let [content (str/trim (.-content block))
+                       lines (str/split content #"\n")]
+                   (if (> (count lines) 1)
+                     ;; Multi-line: first line = tag, rest = content
+                     (let [tag (str/trim (first lines))
+                           memory-content (str/join "\n" (map str/trim (rest lines)))]
+                       (-> (store-memory! tag memory-content)
+                           (.then (fn [_]
+                                    (js/logseq.App.showMsg (str "Memory stored to " tag) :success)))
+                           (.catch (fn [err]
+                                     (js/logseq.App.showMsg (str "Error: " (.-message err)) :error)))))
+                     ;; Single line: store to inbox
+                     (let [tag "inbox"
+                           memory-content content]
+                       (-> (store-memory! tag memory-content)
+                           (.then (fn [_]
+                                    (js/logseq.App.showMsg (str "Memory stored to " tag) :success)))
+                           (.catch (fn [err]
+                                     (js/logseq.App.showMsg (str "Error: " (.-message err)) :error)))))))))
         (.catch (fn [err]
                   (js/console.error "Store command error:" err))))))
 
-(defn- handle-recall-command [e]
+(defn handle-recall-command
+  "Slash command handler for recalling memories by page/tag name.
+   Block text = tag to recall from. Uses retrieve-by-tag and inserts child blocks."
+  [e]
   (let [block-uuid (.-uuid e)]
     (-> (js/logseq.Editor.getBlock block-uuid)
         (.then (fn [block]
-                 (let [query (.-content block)]
-                   (-> (retrieve-memories query)
+                 (let [tag (str/trim (.-content block))]
+                   (-> (retrieve-by-tag tag)
                        (.then (fn [results]
                                 (if (seq results)
-                                  (let [summary (str "Found " (count results) " memories:\n"
-                                                   (str/join "\n" (map #(str "- " (:block/content %)) results)))]
-                                    (js/logseq.Editor.insertBlock block-uuid summary))
-                                  (js/logseq.App.showMsg "No memories found" :info))))
+                                  (let [blocks-to-insert (clj->js (mapv (fn [b] {:content (get b :content)}) results))]
+                                    (js/logseq.Editor.insertBatchBlock block-uuid blocks-to-insert #js {:sibling false}))
+                                  (js/logseq.App.showMsg (str "No memories found for '" tag "'") :info))))
                        (.catch (fn [err]
                                  (js/logseq.App.showMsg (str "Error: " (.-message err)) :error)))))))
         (.catch (fn [err]
                   (js/console.error "Recall command error:" err))))))
 
+(defn handle-search-command
+  "Slash command handler for full-text search across memory pages.
+   Block text = search query. Uses retrieve-memories (Datalog full-text search)."
+  [e]
+  (let [block-uuid (.-uuid e)]
+    (-> (js/logseq.Editor.getBlock block-uuid)
+        (.then (fn [block]
+                 (let [query (str/trim (.-content block))]
+                   (-> (retrieve-memories query)
+                       (.then (fn [results]
+                                (if (seq results)
+                                  (let [blocks-to-insert (clj->js (mapv (fn [b] {:content (:block/content b)}) results))]
+                                    (js/logseq.Editor.insertBatchBlock block-uuid blocks-to-insert #js {:sibling false}))
+                                  (js/logseq.App.showMsg "No memories matching query" :info))))
+                       (.catch (fn [err]
+                                 (js/logseq.App.showMsg (str "Error: " (.-message err)) :error)))))))
+        (.catch (fn [err]
+                  (js/console.error "Search command error:" err))))))
+
+(defn handle-list-command
+  "Slash command handler for listing all memory pages.
+   Lists all pages under the memory prefix as [[page]] links inserted as child blocks."
+  [e]
+  (let [block-uuid (.-uuid e)
+        prefix (str/lower-case (:page-prefix (:config @state)))
+        query (str "[:find (pull ?p [:block/name :block/original-name])
+                     :where [?p :block/name ?name]
+                     [(clojure.string/starts-with? ?name \"" (escape-datalog-string prefix) "\")]]")]
+    (-> (js/logseq.DB.datascriptQuery query)
+        (.then (fn [results]
+                 (if (and results (pos? (.-length results)))
+                   (let [converted (js->clj results :keywordize-keys true)
+                         page-names (mapv (fn [result] (:block/name (first result))) converted)
+                         blocks-to-insert (clj->js (mapv (fn [pn] {:content (str "[[" pn "]]")}) page-names))]
+                     (js/logseq.Editor.insertBatchBlock block-uuid blocks-to-insert #js {:sibling false}))
+                   (js/logseq.App.showMsg "No memory pages found" :info))))
+        (.catch (fn [err]
+                  (js/console.error "List command error:" err))))))
+
 (defn register-commands!
-  "Registers /ai-memory:store and /ai-memory:recall slash commands in Logseq."
+  "Registers all memory slash commands in Logseq."
   []
   (js/logseq.Editor.registerSlashCommand "ai-memory:store" handle-store-command)
-  (js/logseq.Editor.registerSlashCommand "ai-memory:recall" handle-recall-command))
+  (js/logseq.Editor.registerSlashCommand "ai-memory:recall" handle-recall-command)
+  (js/logseq.Editor.registerSlashCommand "ai-memory:search" handle-search-command)
+  (js/logseq.Editor.registerSlashCommand "ai-memory:list" handle-list-command))
 
 ;; ---------------------------------------------------------------------------
 ;; Init

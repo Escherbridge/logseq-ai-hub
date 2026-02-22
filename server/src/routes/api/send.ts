@@ -6,22 +6,15 @@ import { insertMessage } from "../../db/messages";
 import { sseManager } from "../../services/sse";
 import { sendWhatsAppMessage } from "../../services/whatsapp";
 import { sendTelegramMessage } from "../../services/telegram";
-
-function authenticateRequest(req: Request, config: Config): boolean {
-  const auth = req.headers.get("Authorization");
-  return auth === `Bearer ${config.pluginApiToken}`;
-}
+import { authenticate, unauthorizedResponse } from "../../middleware/auth";
 
 export async function handleSendMessage(
   req: Request,
   config: Config,
   db: Database
 ): Promise<Response> {
-  if (!authenticateRequest(req, config)) {
-    return Response.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
+  if (!authenticate(req, config)) {
+    return unauthorizedResponse();
   }
 
   let body: SendRequest;

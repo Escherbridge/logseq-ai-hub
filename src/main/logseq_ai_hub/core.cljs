@@ -4,7 +4,12 @@
             [logseq-ai-hub.memory :as memory]
             [logseq-ai-hub.tasks :as tasks]
             [logseq-ai-hub.sub-agents :as sub-agents]
-            [logseq-ai-hub.job-runner.init :as job-runner-init]))
+            [logseq-ai-hub.secrets :as secrets]
+            [logseq-ai-hub.job-runner.init :as job-runner-init]
+            [logseq-ai-hub.agent-bridge :as agent-bridge]
+            [logseq-ai-hub.settings-writer :as settings-writer]
+            [logseq-ai-hub.llm.enriched :as enriched]
+            [clojure.string :as str]))
 
 (def settings-schema
   [{:key "webhookServerUrl"
@@ -27,27 +32,37 @@
     :title "Memory Page Prefix"
     :description "Prefix for memory pages in Logseq (e.g. AI-Memory/)."
     :default "AI-Memory/"}
-   {:key "openAIKey"
+   {:key "llmApiKey"
     :type "string"
-    :title "OpenAI API Key"
-    :description "Enter your OpenAI API Key here."
+    :title "LLM API Key"
+    :description "Your LLM provider API key (OpenRouter, etc.)"
     :default ""}
-   {:key "openAIEndpoint"
+   {:key "llmEndpoint"
     :type "string"
-    :title "OpenAI API Endpoint"
-    :description "The API endpoint URL (default: https://api.openai.com/v1)"
-    :default "https://api.openai.com/v1"}
-   {:key "chatModel"
+    :title "LLM API Endpoint"
+    :description "The API endpoint URL (default: OpenRouter)"
+    :default "https://openrouter.ai/api/v1"}
+   {:key "llmModel"
     :type "string"
-    :title "Chat Model Name"
-    :description "The model ID to use (e.g. gpt-3.5-turbo, gpt-4, mistralai/mistral-7b-instruct)"
-    :default "gpt-3.5-turbo"}
+    :title "LLM Model Name"
+    :description "The model ID to use (e.g. anthropic/claude-sonnet-4)"
+    :default "anthropic/claude-sonnet-4"}
    {:key "selectedModel"
     :type "enum"
     :title "Select Model"
     :description "Choose which model to use for the /LLM command."
-    :enumChoices ["openai-model" "mock-model" "reverse-model"]
-    :default "openai-model"}
+    :enumChoices ["llm-model" "mock-model" "reverse-model"]
+    :default "llm-model"}
+   {:key "pageRefDepth"
+    :type "number"
+    :title "Page Reference Link Depth"
+    :description "How many levels of [[links]] to follow when fetching page context (0 = referenced pages only)."
+    :default 0}
+   {:key "pageRefMaxTokens"
+    :type "number"
+    :title "Page Reference Max Tokens"
+    :description "Approximate token budget for injected page context."
+    :default 8000}
    {:key "jobRunnerEnabled"
     :type "boolean"
     :title "Enable Job Runner"
@@ -82,39 +97,64 @@
     :type "string"
     :title "MCP Server Configs"
     :description "JSON array of MCP server configurations. Each: {\"id\": \"...\", \"url\": \"...\", \"auth-token\": \"...\"}"
-    :default "[]"}])
+    :default "[]"}
+   {:key "secretsVault"
+    :type "string"
+    :title "Secrets Vault"
+    :description "JSON object of secret key-value pairs. Reference in configs with {{secret.KEY_NAME}}. Example: {\"OPENROUTER_KEY\": \"sk-...\", \"SLACK_TOKEN\": \"xoxb-...\"}. Values are visible in this field — do not share screenshots."
+    :default "{}"}])
+
+(defn migrate-settings!
+  "Migrates old OpenAI-specific settings keys to new provider-agnostic names.
+   Copies values forward only if old key has value and new key is empty/default."
+  []
+  (let [settings js/logseq.settings]
+    (doseq [[old-key new-key default-val]
+            [["openAIKey" "llmApiKey" ""]
+             ["openAIEndpoint" "llmEndpoint" "https://openrouter.ai/api/v1"]
+             ["chatModel" "llmModel" "anthropic/claude-sonnet-4"]]]
+      (let [old-val (aget settings old-key)
+            new-val (aget settings new-key)]
+        (when (and (not (str/blank? old-val))
+                   (or (nil? new-val) (str/blank? new-val)))
+          (settings-writer/queue-settings-write!
+            (fn []
+              (js/logseq.updateSettings (clj->js {(keyword new-key) old-val}))
+              (js/console.log (str "Settings migration: " old-key " -> " new-key)))))))))
 
 (defn handle-llm-command [e]
-  (let [block-uuid (.-uuid e)
-        model-id (aget js/logseq.settings "selectedModel")]
-    (js/console.log "LLM command fired. block:" block-uuid "model:" model-id)
+  (let [block-uuid (.-uuid e)]
+    (js/console.log "LLM command fired. block:" block-uuid)
     (-> (js/logseq.Editor.getBlock block-uuid)
         (.then (fn [block]
                  (if block
-                   (let [content (.-content block)]
-                     (js/console.log "LLM processing content:" content)
-                     (agent/process-input content (or model-id "openai-model")))
+                   (do (js/console.log "LLM processing content:" (.-content block))
+                       (enriched/call (.-content block)))
                    (do (js/console.error "LLM: block not found for uuid" block-uuid)
                        (js/Promise.resolve "Error: Could not read block content.")))))
         (.then (fn [response]
-                 (js/console.log "LLM response:" response)
+                 (js/console.log "LLM response received, length:" (count response))
                  (if (and response (not= response ""))
                    (js/logseq.Editor.insertBlock block-uuid response)
                    (js/logseq.Editor.insertBlock block-uuid "Error: Empty response from model."))))
         (.catch (fn [err]
                   (js/console.error "LLM command error:" err)
                   (js/logseq.Editor.insertBlock block-uuid
-                    (str "Error: " (.-message err))))))))
+                    (str "Error: " (if (instance? js/Error err) (.-message err) (str err)))))))))
 
 (defn main []
   (js/console.log "Loaded Logseq AI Hub Plugin")
   (js/logseq.useSettingsSchema (clj->js settings-schema))
+  (migrate-settings!)
   (js/logseq.Editor.registerSlashCommand "LLM" handle-llm-command)
+  (secrets/init!)
+  (secrets/register-commands!)
   (messaging/init!)
   (memory/init!)
   (tasks/init!)
   (sub-agents/init!)
-  (job-runner-init/init!))
+  (job-runner-init/init!)
+  (agent-bridge/init!))
 
 (defn init []
   (-> (js/logseq.ready main)

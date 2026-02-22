@@ -1,22 +1,15 @@
 import type { Database } from "bun:sqlite";
 import type { Config } from "../../config";
 import { getMessages } from "../../db/messages";
-
-function authenticateRequest(req: Request, config: Config): boolean {
-  const auth = req.headers.get("Authorization");
-  return auth === `Bearer ${config.pluginApiToken}`;
-}
+import { authenticate, unauthorizedResponse } from "../../middleware/auth";
 
 export function handleGetMessages(
   req: Request,
   config: Config,
   db: Database
 ): Response {
-  if (!authenticateRequest(req, config)) {
-    return Response.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
+  if (!authenticate(req, config)) {
+    return unauthorizedResponse();
   }
 
   const url = new URL(req.url);

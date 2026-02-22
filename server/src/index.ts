@@ -1,7 +1,11 @@
-import { loadConfig, validateConfig } from "./config";
+import { loadConfig, validateConfig, validateAgentConfig } from "./config";
 import { getDatabase } from "./db/connection";
 import { createRouter } from "./router";
 import { sseManager } from "./services/sse";
+import { AgentBridge } from "./services/agent-bridge";
+import { ConversationStore } from "./services/conversations";
+import { createMcpServer } from "./services/mcp-server";
+import { registerAllMcpHandlers } from "./services/mcp/index";
 
 const config = loadConfig();
 
@@ -12,8 +16,22 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
+const agentWarnings = validateAgentConfig(config);
+agentWarnings.forEach((w) => console.warn(`  Warning: ${w}`));
+
 const db = getDatabase(config.databasePath);
-const router = createRouter({ config, db });
+const agentBridge = new AgentBridge(config.agentRequestTimeout);
+const conversations = new ConversationStore();
+
+// Initialize MCP server and register all tools/resources/prompts
+const mcpServer = createMcpServer();
+registerAllMcpHandlers(mcpServer, () => ({
+  bridge: agentBridge,
+  db,
+  config,
+}));
+
+const router = createRouter({ config, db, agentBridge, conversations });
 
 sseManager.start();
 

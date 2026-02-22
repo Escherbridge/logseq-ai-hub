@@ -1,0 +1,12 @@
+{
+  "active": true,
+  "mode": "ultrapilot",
+  "task": "Implement job-runner_20260219 track",
+  "workers": [
+    {"id": "w2-1", "status": "running", "files": ["src/main/logseq_ai_hub/job_runner/scheduler.cljs", "src/test/logseq_ai_hub/job_runner/scheduler_test.cljs"], "task_id": "a21cb26", "phase": 7},
+    {"id": "w2-2", "status": "running", "files": ["src/main/logseq_ai_hub/job_runner/openclaw.cljs", "src/test/logseq_ai_hub/job_runner/openclaw_test.cljs"], "task_id": "a73750c", "phase": 8},
+    {"id": "w2-3", "status": "running", "files": ["src/main/logseq_ai_hub/job_runner/commands.cljs", "src/test/logseq_ai_hub/job_runner/commands_test.cljs", "src/main/logseq_ai_hub/job_runner/init.cljs", "src/main/logseq_ai_hub/core.cljs"], "task_id": "aaadd69", "phase": 9}
+  ],
+  "shared_files": ["src/main/logseq_ai_hub/core.cljs", "src/main/logseq_ai_hub/util/errors.cljs"],
+  "phase": "wave_2_parallel_execution"
+}

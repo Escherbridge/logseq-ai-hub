@@ -6,9 +6,12 @@
             [logseq-ai-hub.job-runner.executor :as executor]
             [logseq-ai-hub.job-runner.graph :as graph]
             [logseq-ai-hub.job-runner.queue :as queue]
-            [logseq-ai-hub.job-runner.mcp.client :as mcp-client]
+            [logseq-ai-hub.job-runner.interpolation :as interpolation]
+            [logseq-ai-hub.mcp.client :as mcp-client]
             [logseq-ai-hub.job-runner.openclaw :as openclaw]
             [logseq-ai-hub.job-runner.commands :as commands]
+            [logseq-ai-hub.secrets :as secrets]
+            [clojure.string :as str]
             [cljs.reader :as reader]))
 
 ;; =============================================================================
@@ -59,6 +62,27 @@
   []
   (engine/set-executor-execute-step! executor/execute-step)
   (js/console.log "Job runner: Engine wired to executor"))
+
+(defn- wire-secrets-resolver!
+  "Wires the interpolation engine to resolve {{secret.KEY}} references
+   from the secrets vault via dependency injection."
+  []
+  (set! interpolation/*resolve-secret* secrets/get-secret)
+  (js/console.log "Job runner: Secret resolver wired to interpolation engine"))
+
+(defn- resolve-server-auth-token
+  "Resolves MCP server auth-token, interpolating {{secret.KEY}} references."
+  [config]
+  (let [token (:auth-token config)]
+    (if (and (string? token) (str/starts-with? token "{{secret."))
+      (let [resolved (interpolation/interpolate token {})]
+        (if (str/blank? resolved)
+          (do
+            (js/console.warn "MCP server" (:id config)
+                           ": secret reference could not be resolved, proceeding without auth")
+            (dissoc config :auth-token))
+          (assoc config :auth-token resolved)))
+      config)))
 
 (defn- init-runner!
   "Initializes the job runner with dependencies."
@@ -137,14 +161,15 @@
   (let [servers (parse-mcp-servers (:mcp-servers-json settings))]
     (when (seq servers)
       (doseq [server servers]
-        (-> (mcp-client/connect-server! server)
-            (.then (fn [_]
-                     (swap! system-state update :mcp-servers conj server)
-                     (js/console.log "Job runner: Connected to MCP server"
-                                   (:id server))))
-            (.catch (fn [err]
-                      (js/console.error "Failed to connect to MCP server"
-                                      (:id server) err))))))))
+        (let [resolved-server (resolve-server-auth-token server)]
+          (-> (mcp-client/connect-server! resolved-server)
+              (.then (fn [_]
+                       (swap! system-state update :mcp-servers conj resolved-server)
+                       (js/console.log "Job runner: Connected to MCP server"
+                                     (:id resolved-server))))
+              (.catch (fn [err]
+                        (js/console.error "Failed to connect to MCP server"
+                                        (:id resolved-server) err)))))))))
 
 ;; =============================================================================
 ;; Public API
@@ -171,6 +196,7 @@
 
         ;; Wire dependencies
         (wire-engine-executor!)
+        (wire-secrets-resolver!)
 
         ;; Initialize subsystems
         (init-runner! settings)

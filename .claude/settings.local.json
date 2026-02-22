@@ -18,7 +18,22 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:unpkg.com)",
       "WebFetch(domain:www.npmjs.com)",
-      "WebFetch(domain:deepwiki.com)"
+      "WebFetch(domain:deepwiki.com)",
+      "Skill(conductor:new-track)",
+      "Skill(conductor:new-track:*)",
+      "Bash(del \"c:\\\\Users\\\\atooz\\\\Documents\\\\Escherbridge\\\\LogseqPlugin\\\\verify_modules.mjs\" \"c:\\\\Users\\\\atooz\\\\Documents\\\\Escherbridge\\\\LogseqPlugin\\\\verify_mcp.cljs\" \"c:\\\\Users\\\\atooz\\\\Documents\\\\Escherbridge\\\\LogseqPlugin\\\\shadow-cljs-verify.edn\")",
+      "Bash(bun run tsc:*)",
+      "Bash(bun x tsc:*)",
+      "Bash(bun run:*)",
+      "Bash(bun build:*)",
+      "Bash(bunx tsc:*)",
+      "Bash(bun check:*)",
+      "Bash(ls:*)",
+      "Bash(bun -e:*)",
+      "Bash(npx tsc:*)",
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(xargs:*)",
+      "Bash(bun add:*)"
     ]
   }
 }

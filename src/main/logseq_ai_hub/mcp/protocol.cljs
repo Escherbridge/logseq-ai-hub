@@ -1,4 +1,4 @@
-(ns logseq-ai-hub.job-runner.mcp.protocol
+(ns logseq-ai-hub.mcp.protocol
   "JSON-RPC 2.0 message construction for Model Context Protocol (MCP).")
 
 (defonce request-counter (atom 0))

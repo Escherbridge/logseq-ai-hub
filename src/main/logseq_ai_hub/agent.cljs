@@ -47,40 +47,65 @@
    (str "🤖 **" model-id "** says: " (str/reverse input))))
 
 ;; -----------------------------------------------------------------------------
-;; OpenAI Model
+;; LLM Model
 ;; -----------------------------------------------------------------------------
 
-(defn openai-handler [input _model-id]
-  (let [settings js/logseq.settings
-        api-key (aget settings "openAIKey")
-        endpoint (aget settings "openAIEndpoint")
-        model-name (or (aget settings "chatModel") "gpt-3.5-turbo")
-        url (str (if (str/ends-with? endpoint "/")
-                   (subs endpoint 0 (dec (count endpoint)))
-                   endpoint)
-                 "/chat/completions")]
+(defn make-llm-handler
+  "Creates an LLM API handler with an optional system prompt.
+   Returns a function with signature [input model-id] -> Promise<string>."
+  ([]
+   (make-llm-handler nil))
+  ([system-prompt]
+   (fn [input _model-id]
+     (let [settings js/logseq.settings
+           api-key (aget settings "llmApiKey")
+           endpoint (aget settings "llmEndpoint")
+           model-name (or (aget settings "llmModel") "anthropic/claude-sonnet-4")
+           url (str (if (str/ends-with? endpoint "/")
+                      (subs endpoint 0 (dec (count endpoint)))
+                      endpoint)
+                    "/chat/completions")
+           messages (cond-> []
+                      (not (str/blank? system-prompt))
+                      (conj {:role "system" :content system-prompt})
+                      true
+                      (conj {:role "user" :content input}))]
 
-    (if (str/blank? api-key)
-      (js/Promise.resolve "⚠️ **Error**: OpenAI API Key is missing. Please check Plugin Settings.")
-      (-> (js/fetch url
-                    (clj->js {:method "POST"
-                              :headers {"Content-Type" "application/json"
-                                        "Authorization" (str "Bearer " api-key)}
-                              :body (js/JSON.stringify
-                                     (clj->js {:model model-name
-                                               :messages [{:role "user" :content input}]}))}))
-          (.then (fn [response]
-                   (if (.-ok response)
-                     (.json response)
-                     (throw (js/Error. (str "API Error: " (.-statusText response)))))))
-          (.then (fn [data]
-                   (let [msg (-> data .-choices (aget 0) .-message .-content)]
-                     msg)))
-          (.catch (fn [err]
-                    (js/console.error "OpenAI Handler Error:" err)
-                    (str "⚠️ **Error calling OpenAI**: " (.-message err))))))))
+       (if (str/blank? api-key)
+         (js/Promise.resolve "⚠️ **Error**: LLM API Key is missing. Please check Plugin Settings.")
+         (-> (js/fetch url
+                       (clj->js {:method "POST"
+                                 :headers {"Content-Type" "application/json"
+                                           "Authorization" (str "Bearer " api-key)}
+                                 :body (js/JSON.stringify
+                                        (clj->js {:model model-name
+                                                  :messages messages}))}))
+             (.then (fn [response]
+                      (if (.-ok response)
+                        (.json response)
+                        (-> (.text response)
+                            (.then (fn [body]
+                                     (js/console.error "API response body:" body)
+                                     (throw (js/Error. (str "API " (.-status response) ": " body)))))))))
+             (.then (fn [data]
+                      (let [msg (-> data .-choices (aget 0) .-message .-content)]
+                        msg)))
+             (.catch (fn [err]
+                       (js/console.error "LLM Handler Error:" err)
+                       (str "⚠️ **Error calling LLM API**: " (.-message err))))))))))
+
+(def llm-handler
+  "Default LLM handler with no system prompt."
+  (make-llm-handler))
+
+(defn process-with-system-prompt
+  "Creates an ad-hoc handler with the given system prompt, calls it with input.
+   Returns a Promise<string>."
+  [input system-prompt]
+  (let [handler (make-llm-handler system-prompt)]
+    (handler input nil)))
 
 ;; Register models
 (register-model "mock-model" echo-handler)
 (register-model "reverse-model" reverse-handler)
-(register-model "openai-model" openai-handler)
+(register-model "llm-model" llm-handler)

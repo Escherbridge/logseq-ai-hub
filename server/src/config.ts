@@ -6,6 +6,10 @@ export interface Config {
   telegramBotToken: string;
   pluginApiToken: string;
   databasePath: string;
+  llmApiKey: string;
+  llmEndpoint: string;
+  agentModel: string;
+  agentRequestTimeout: number;
 }
 
 export function loadConfig(): Config {
@@ -17,6 +21,10 @@ export function loadConfig(): Config {
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
     pluginApiToken: process.env.PLUGIN_API_TOKEN || "",
     databasePath: process.env.DATABASE_PATH || "./data/hub.sqlite",
+    llmApiKey: process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY || "",
+    llmEndpoint: process.env.LLM_ENDPOINT || "https://openrouter.ai/api/v1",
+    agentModel: process.env.AGENT_MODEL || "anthropic/claude-sonnet-4",
+    agentRequestTimeout: parseInt(process.env.AGENT_REQUEST_TIMEOUT || "30000", 10),
   };
 }
 
@@ -26,4 +34,12 @@ export function validateConfig(config: Config): string[] {
     errors.push("PLUGIN_API_TOKEN is required");
   }
   return errors;
+}
+
+export function validateAgentConfig(config: Config): string[] {
+  const warnings: string[] = [];
+  if (!config.llmApiKey) {
+    warnings.push("LLM_API_KEY not set - agent chat endpoints will return 503");
+  }
+  return warnings;
 }

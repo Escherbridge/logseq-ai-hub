@@ -1,5 +1,6 @@
 (ns logseq-ai-hub.messaging
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [logseq-ai-hub.agent-bridge :as agent-bridge]))
 
 ;; ---------------------------------------------------------------------------
 ;; State
@@ -10,7 +11,10 @@
          :server-url nil
          :api-token nil
          :connected? false
-         :message-handlers []}))
+         :message-handlers []
+         :intentional-disconnect? false
+         :reconnect-attempt 0
+         :reconnect-timer nil}))
 
 ;; ---------------------------------------------------------------------------
 ;; Pure Helpers (public for testability)
@@ -112,18 +116,47 @@
                        (notify-handlers msg))
       "message_sent" (when-let [msg (:message data)]
                        (notify-handlers msg))
-      "connected"    (js/console.log "SSE connected:" (pr-str data))
+      "connected"    (do
+                       (js/console.log "SSE connected:" (pr-str data))
+                       (swap! state assoc :reconnect-attempt 0))
       "heartbeat"    nil
       (js/console.log "Unknown SSE event:" event-type))))
 
-(defn disconnect!
-  "Disconnects from the webhook server."
+(defn- disconnect-internal!
+  "Closes the current EventSource without setting the intentional disconnect flag."
   []
   (when-let [es (:event-source @state)]
     (.close es))
   (swap! state assoc
          :event-source nil
          :connected? false))
+
+(declare connect!)
+
+(defn- schedule-reconnect!
+  "Schedules an SSE reconnection with exponential backoff.
+   Backoff: 1s -> 2s -> 4s -> 8s -> 16s -> 30s (cap)."
+  []
+  (when-not (:intentional-disconnect? @state)
+    (let [attempt (inc (or (:reconnect-attempt @state) 0))
+          backoff (min 30000 (* 1000 (js/Math.pow 2 (dec attempt))))]
+      (js/console.log (str "SSE reconnecting (attempt " attempt ", backoff " (/ backoff 1000) "s)"))
+      (swap! state assoc :reconnect-attempt attempt)
+      (let [timer (js/setTimeout
+                    (fn []
+                      (connect! (:server-url @state) (:api-token @state)))
+                    backoff)]
+        (swap! state assoc :reconnect-timer timer)))))
+
+(defn disconnect!
+  "Disconnects from the webhook server intentionally."
+  []
+  (when-let [timer (:reconnect-timer @state)]
+    (js/clearTimeout timer))
+  (disconnect-internal!)
+  (swap! state assoc
+         :intentional-disconnect? true
+         :reconnect-timer nil))
 
 (defn connect!
   "Connects to the webhook server via SSE.
@@ -133,7 +166,11 @@
    (when (and server-url api-token
               (not (str/blank? server-url))
               (not (str/blank? api-token)))
-     (disconnect!)
+     ;; Clear any pending reconnect timer
+     (when-let [timer (:reconnect-timer @state)]
+       (js/clearTimeout timer))
+     ;; Close existing connection without setting intentional flag
+     (disconnect-internal!)
      (let [url (build-sse-url server-url api-token)
            es  (js/EventSource. url)]
        ;; Register event listeners for each SSE event type
@@ -141,18 +178,24 @@
          (.addEventListener es event-type
                             (fn [e]
                               (handle-sse-event event-type (.-data e)))))
-       ;; Error handler
+       ;; Register agent request handler
+       (agent-bridge/register-agent-handler! es)
+       ;; Error handler with reconnection
        (set! (.-onerror es)
              (fn [_e]
                (js/console.error "SSE connection error")
                (when (= (.-readyState es) 2) ;; CLOSED
-                 (swap! state assoc :connected? false))))
+                 (swap! state assoc :connected? false :event-source nil)
+                 (schedule-reconnect!))))
        ;; Update state
        (swap! state assoc
               :event-source es
               :server-url server-url
               :api-token api-token
-              :connected? true)
+              :connected? true
+              :intentional-disconnect? false
+              :reconnect-attempt 0
+              :reconnect-timer nil)
        es))))
 
 ;; ---------------------------------------------------------------------------
