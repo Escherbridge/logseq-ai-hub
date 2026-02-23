@@ -28,9 +28,7 @@
   [content & {:keys [model-id extra-system-prompt]}]
   (let [{:keys [mcp-refs memory-refs page-refs options prompt]}
           (arg-parser/parse-llm-args content)
-        effective-model (or model-id
-                            (aget js/logseq.settings "selectedModel")
-                            "llm-model")]
+        effective-model (or model-id "llm-model")]
     (if-not (or (arg-parser/has-context-refs?
                   {:mcp-refs mcp-refs :memory-refs memory-refs :page-refs page-refs})
                 extra-system-prompt)

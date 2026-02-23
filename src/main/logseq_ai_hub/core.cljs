@@ -47,12 +47,6 @@
     :title "LLM Model Name"
     :description "The model ID to use (e.g. anthropic/claude-sonnet-4)"
     :default "anthropic/claude-sonnet-4"}
-   {:key "selectedModel"
-    :type "enum"
-    :title "Select Model"
-    :description "Choose which model to use for the /LLM command."
-    :enumChoices ["llm-model" "mock-model" "reverse-model"]
-    :default "llm-model"}
    {:key "pageRefDepth"
     :type "number"
     :title "Page Reference Link Depth"
