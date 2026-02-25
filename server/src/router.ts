@@ -17,6 +17,13 @@ import { handleListSkills, handleGetSkill, handleCreateSkill } from "./routes/ap
 import { handleListMCPServers, handleListMCPTools, handleListMCPResources } from "./routes/api/mcp";
 import { handleAgentChat } from "./routes/api/agent-chat";
 import { handleListSecretKeys, handleSetSecret, handleRemoveSecret, handleCheckSecret } from "./routes/api/secrets";
+import {
+  handleListCharacters,
+  handleCreateCharacter,
+  handleGetCharacter,
+  handleUpdateCharacter,
+  handleDeleteCharacter,
+} from "./routes/api/characters";
 import { handleMcpRequest, handleMcpDelete, handleMcpConfig } from "./routes/mcp-transport";
 import { matchRoute } from "./router/match";
 
@@ -192,6 +199,32 @@ export function createRouter(ctx: RouteContext) {
         }
         return handleAgentChat(req, ctx.config, ctx.agentBridge, ctx.conversations, ctx.traceId);
       },
+    },
+    // Characters API
+    {
+      method: "GET",
+      pattern: "/api/characters",
+      handler: (req, ctx) => handleListCharacters(req, ctx.config, ctx.db),
+    },
+    {
+      method: "POST",
+      pattern: "/api/characters",
+      handler: (req, ctx) => handleCreateCharacter(req, ctx.config, ctx.db),
+    },
+    {
+      method: "GET",
+      pattern: "/api/characters/:id",
+      handler: (req, ctx, params) => handleGetCharacter(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "PUT",
+      pattern: "/api/characters/:id",
+      handler: (req, ctx, params) => handleUpdateCharacter(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "DELETE",
+      pattern: "/api/characters/:id",
+      handler: (req, ctx, params) => handleDeleteCharacter(req, ctx.config, ctx.db, params),
     },
     // MCP Server Protocol (Streamable HTTP transport)
     {

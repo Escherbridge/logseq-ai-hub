@@ -40,5 +40,20 @@ export function initializeSchema(db: Database): void {
       payload TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS characters (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      persona TEXT,
+      system_prompt TEXT,
+      model TEXT,
+      skills TEXT NOT NULL DEFAULT '[]',
+      memory_tag TEXT NOT NULL,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_name ON characters(name);
   `);
 }
