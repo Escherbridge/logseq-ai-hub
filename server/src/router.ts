@@ -24,6 +24,7 @@ import {
   handleUpdateCharacter,
   handleDeleteCharacter,
 } from "./routes/api/characters";
+import { handleCharacterChat } from "./routes/api/character-chat";
 import { handleMcpRequest, handleMcpDelete, handleMcpConfig } from "./routes/mcp-transport";
 import { matchRoute } from "./router/match";
 
@@ -225,6 +226,16 @@ export function createRouter(ctx: RouteContext) {
       method: "DELETE",
       pattern: "/api/characters/:id",
       handler: (req, ctx, params) => handleDeleteCharacter(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "POST",
+      pattern: "/api/characters/:id/chat",
+      handler: (req, ctx, params) => {
+        if (!ctx.conversations) {
+          return Response.json({ success: false, error: "Conversation store not initialized" }, { status: 503 });
+        }
+        return handleCharacterChat(req, ctx.config, ctx.db, ctx.agentBridge, ctx.conversations, params, ctx.traceId);
+      },
     },
     // MCP Server Protocol (Streamable HTTP transport)
     {
