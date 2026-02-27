@@ -55,5 +55,17 @@ export function initializeSchema(db: Database): void {
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_name ON characters(name);
+
+    CREATE TABLE IF NOT EXISTS character_sessions (
+      id TEXT PRIMARY KEY,
+      character_id TEXT NOT NULL,
+      messages TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_character_sessions_character ON character_sessions(character_id);
+    CREATE INDEX IF NOT EXISTS idx_character_sessions_updated ON character_sessions(updated_at);
   `);
 }

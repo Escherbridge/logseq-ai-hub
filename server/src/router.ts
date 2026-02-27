@@ -230,12 +230,8 @@ export function createRouter(ctx: RouteContext) {
     {
       method: "POST",
       pattern: "/api/characters/:id/chat",
-      handler: (req, ctx, params) => {
-        if (!ctx.conversations) {
-          return Response.json({ success: false, error: "Conversation store not initialized" }, { status: 503 });
-        }
-        return handleCharacterChat(req, ctx.config, ctx.db, ctx.agentBridge, ctx.conversations, params, ctx.traceId);
-      },
+      handler: (req, ctx, params) =>
+        handleCharacterChat(req, ctx.config, ctx.db, ctx.agentBridge, params, ctx.traceId),
     },
     // MCP Server Protocol (Streamable HTTP transport)
     {
