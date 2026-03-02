@@ -194,7 +194,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 1.6: Implement SessionStore Class
+### Task 1.6: Implement SessionStore Class [x] [0dd0d45]
 
 **TDD Cycle:**
 - RED: Write tests for `SessionStore` class that wraps the data access functions, managing the DB instance and providing a clean API.
