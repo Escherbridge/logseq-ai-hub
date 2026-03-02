@@ -72,7 +72,7 @@ Server tests:
 
 ---
 
-### Task 1.2: Add Session Tables to SQLite Schema
+### Task 1.2: Add Session Tables to SQLite Schema [x] [0dbab6b]
 
 **TDD Cycle:**
 - RED: Write tests in `server/tests/session-store.test.ts` that create a test DB and verify the `sessions` and `session_messages` tables exist (query `sqlite_master`).
