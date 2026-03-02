@@ -25,6 +25,11 @@ import {
   handleDeleteCharacter,
 } from "./routes/api/characters";
 import { handleCharacterChat } from "./routes/api/character-chat";
+import {
+  handleListCharacterSessions,
+  handleGetCharacterSession,
+  handleDeleteCharacterSession,
+} from "./routes/api/character-sessions";
 import { handleMcpRequest, handleMcpDelete, handleMcpConfig } from "./routes/mcp-transport";
 import { matchRoute } from "./router/match";
 
@@ -232,6 +237,24 @@ export function createRouter(ctx: RouteContext) {
       pattern: "/api/characters/:id/chat",
       handler: (req, ctx, params) =>
         handleCharacterChat(req, ctx.config, ctx.db, ctx.agentBridge, params, ctx.traceId),
+    },
+    {
+      method: "GET",
+      pattern: "/api/characters/:id/sessions",
+      handler: (req, ctx, params) =>
+        handleListCharacterSessions(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "GET",
+      pattern: "/api/character-sessions/:id",
+      handler: (req, ctx, params) =>
+        handleGetCharacterSession(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "DELETE",
+      pattern: "/api/character-sessions/:id",
+      handler: (req, ctx, params) =>
+        handleDeleteCharacterSession(req, ctx.config, ctx.db, params),
     },
     // MCP Server Protocol (Streamable HTTP transport)
     {
