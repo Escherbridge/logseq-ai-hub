@@ -2,9 +2,11 @@ import { Database } from "bun:sqlite";
 import type {
   Session,
   SessionContext,
+  SessionMessage,
   CreateSessionParams,
   ListSessionsOptions,
   UpdateSessionParams,
+  AddMessageParams,
 } from "../types/session";
 
 /**
@@ -138,4 +140,113 @@ export function updateSession(
 
   const result = db.run(sql, params);
   return result.changes > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Message Data Access
+// ---------------------------------------------------------------------------
+
+/**
+ * Raw row shape from SQLite for session_messages.
+ * tool_calls and metadata are JSON strings (or null).
+ */
+interface MessageRow {
+  id: number;
+  session_id: string;
+  role: string;
+  content: string;
+  tool_calls: string | null;
+  tool_call_id: string | null;
+  metadata: string | null;
+  created_at: string;
+}
+
+/**
+ * Parse a raw SQLite message row into a typed SessionMessage.
+ * Deserializes tool_calls and metadata JSON strings.
+ */
+function parseMessageRow(row: MessageRow): SessionMessage {
+  return {
+    ...row,
+    role: row.role as SessionMessage["role"],
+    tool_calls: row.tool_calls ? JSON.parse(row.tool_calls) : null,
+    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+  };
+}
+
+/**
+ * Options for loading session messages.
+ */
+export interface LoadMessagesOptions {
+  /** Maximum number of messages to return (default 50). Returns the LAST N messages in ASC order. */
+  limit?: number;
+}
+
+/**
+ * Add a message to a session's conversation history.
+ * Serializes tool_calls and metadata as JSON strings.
+ * Also updates the session's last_active_at to the current time.
+ */
+export function addSessionMessage(
+  db: Database,
+  params: AddMessageParams
+): SessionMessage {
+  const toolCallsJson = params.tool_calls
+    ? JSON.stringify(params.tool_calls)
+    : null;
+  const metadataJson = params.metadata
+    ? JSON.stringify(params.metadata)
+    : null;
+
+  const result = db.run(
+    `INSERT INTO session_messages (session_id, role, content, tool_calls, tool_call_id, metadata)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      params.session_id,
+      params.role,
+      params.content,
+      toolCallsJson,
+      params.tool_call_id ?? null,
+      metadataJson,
+    ]
+  );
+
+  const id = Number(result.lastInsertRowid);
+
+  // Update the session's last_active_at to reflect new activity
+  db.run(
+    `UPDATE sessions SET last_active_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+    [params.session_id]
+  );
+
+  // Retrieve the inserted row to return it with all default-populated fields
+  const row = db
+    .query(`SELECT * FROM session_messages WHERE id = ?`)
+    .get(id) as MessageRow;
+
+  return parseMessageRow(row);
+}
+
+/**
+ * Load messages for a session, ordered by id ASC.
+ * When limit is specified, returns the LAST N messages in ascending order
+ * using a subquery: SELECT * FROM (SELECT ... ORDER BY id DESC LIMIT ?) ORDER BY id ASC.
+ * Default limit is 50.
+ */
+export function loadSessionMessages(
+  db: Database,
+  sessionId: string,
+  opts?: LoadMessagesOptions
+): SessionMessage[] {
+  const limit = opts?.limit ?? 50;
+
+  const sql = `SELECT * FROM (
+    SELECT * FROM session_messages
+    WHERE session_id = ?
+    ORDER BY id DESC
+    LIMIT ?
+  ) ORDER BY id ASC`;
+
+  const rows = db.query(sql).all(sessionId, limit) as MessageRow[];
+  return rows.map(parseMessageRow);
 }

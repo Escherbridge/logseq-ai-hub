@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createTestDb } from "./helpers";
-import { createSession, getSession, listSessions, updateSession } from "../src/db/sessions";
-import type { Session, SessionContext } from "../src/types/session";
+import { createSession, getSession, listSessions, updateSession, addSessionMessage, loadSessionMessages } from "../src/db/sessions";
+import type { Session, SessionContext, SessionMessage } from "../src/types/session";
 
 describe("Session Schema", () => {
   let db: Database;
@@ -652,5 +652,253 @@ describe("Session Data Access - updateSession", () => {
     expect(updated!.name).toBe("Updated");
     expect(updated!.status).toBe("paused");
     expect(updated!.context).toEqual({ focus: "multi-update" });
+  });
+});
+
+describe("Session Data Access - addSessionMessage", () => {
+  let db: Database;
+  let session: Session;
+
+  beforeEach(() => {
+    db = createTestDb();
+    session = createSession(db, { agent_id: "claude-code", name: "Test Session" });
+  });
+
+  it("should insert a user message and return it with auto-incremented id", () => {
+    const msg = addSessionMessage(db, {
+      session_id: session.id,
+      role: "user",
+      content: "Hello",
+    });
+
+    expect(msg.id).toBeDefined();
+    expect(typeof msg.id).toBe("number");
+    expect(msg.id).toBeGreaterThan(0);
+    expect(msg.session_id).toBe(session.id);
+    expect(msg.role).toBe("user");
+    expect(msg.content).toBe("Hello");
+    expect(msg.tool_calls).toBeNull();
+    expect(msg.tool_call_id).toBeNull();
+    expect(msg.metadata).toBeNull();
+    expect(msg.created_at).toBeTruthy();
+  });
+
+  it("should auto-increment ids for successive messages", () => {
+    const msg1 = addSessionMessage(db, {
+      session_id: session.id,
+      role: "user",
+      content: "First",
+    });
+    const msg2 = addSessionMessage(db, {
+      session_id: session.id,
+      role: "assistant",
+      content: "Second",
+    });
+
+    expect(msg2.id).toBeGreaterThan(msg1.id);
+  });
+
+  it("should store tool_calls as JSON and return parsed array", () => {
+    const toolCalls = [
+      { id: "call_1", type: "function", function: { name: "search", arguments: '{"q":"test"}' } },
+    ];
+
+    const msg = addSessionMessage(db, {
+      session_id: session.id,
+      role: "assistant",
+      content: "Let me search for that.",
+      tool_calls: toolCalls,
+    });
+
+    expect(msg.tool_calls).toEqual(toolCalls);
+  });
+
+  it("should store tool_call_id for tool result messages", () => {
+    const msg = addSessionMessage(db, {
+      session_id: session.id,
+      role: "tool",
+      content: '{"results": []}',
+      tool_call_id: "call_1",
+    });
+
+    expect(msg.role).toBe("tool");
+    expect(msg.tool_call_id).toBe("call_1");
+  });
+
+  it("should store metadata as JSON and return parsed object", () => {
+    const msg = addSessionMessage(db, {
+      session_id: session.id,
+      role: "assistant",
+      content: "Response",
+      metadata: { tokens: 150, latency_ms: 320 },
+    });
+
+    expect(msg.metadata).toEqual({ tokens: 150, latency_ms: 320 });
+  });
+
+  it("should update the session's last_active_at when a message is added", () => {
+    // Set last_active_at to a known past time
+    db.run(
+      "UPDATE sessions SET last_active_at = datetime('now', '-2 hours') WHERE id = ?",
+      [session.id]
+    );
+    const before = getSession(db, session.id)!;
+
+    addSessionMessage(db, {
+      session_id: session.id,
+      role: "user",
+      content: "Activity!",
+    });
+
+    const after = getSession(db, session.id)!;
+    expect(new Date(after.last_active_at).getTime()).toBeGreaterThan(
+      new Date(before.last_active_at).getTime()
+    );
+  });
+
+  it("should store all fields together correctly", () => {
+    const toolCalls = [{ id: "tc_1", type: "function", function: { name: "read_page", arguments: "{}" } }];
+    const metadata = { tokens: 200, model: "claude-sonnet" };
+
+    const msg = addSessionMessage(db, {
+      session_id: session.id,
+      role: "assistant",
+      content: "Here is the page content.",
+      tool_calls: toolCalls,
+      metadata,
+    });
+
+    expect(msg.role).toBe("assistant");
+    expect(msg.content).toBe("Here is the page content.");
+    expect(msg.tool_calls).toEqual(toolCalls);
+    expect(msg.metadata).toEqual(metadata);
+  });
+});
+
+describe("Session Data Access - loadSessionMessages", () => {
+  let db: Database;
+  let session: Session;
+
+  beforeEach(() => {
+    db = createTestDb();
+    session = createSession(db, { agent_id: "claude-code", name: "Chat Session" });
+  });
+
+  it("should return messages ordered by id ASC", () => {
+    addSessionMessage(db, { session_id: session.id, role: "user", content: "First" });
+    addSessionMessage(db, { session_id: session.id, role: "assistant", content: "Second" });
+    addSessionMessage(db, { session_id: session.id, role: "user", content: "Third" });
+
+    const messages = loadSessionMessages(db, session.id);
+
+    expect(messages).toHaveLength(3);
+    expect(messages[0].content).toBe("First");
+    expect(messages[1].content).toBe("Second");
+    expect(messages[2].content).toBe("Third");
+    // IDs should be in ascending order
+    expect(messages[0].id).toBeLessThan(messages[1].id);
+    expect(messages[1].id).toBeLessThan(messages[2].id);
+  });
+
+  it("should return the last N messages when limit is specified", () => {
+    addSessionMessage(db, { session_id: session.id, role: "user", content: "Msg 1" });
+    addSessionMessage(db, { session_id: session.id, role: "assistant", content: "Msg 2" });
+    addSessionMessage(db, { session_id: session.id, role: "user", content: "Msg 3" });
+    addSessionMessage(db, { session_id: session.id, role: "assistant", content: "Msg 4" });
+    addSessionMessage(db, { session_id: session.id, role: "user", content: "Msg 5" });
+
+    const messages = loadSessionMessages(db, session.id, { limit: 3 });
+
+    expect(messages).toHaveLength(3);
+    // Should be the LAST 3 messages (Msg 3, Msg 4, Msg 5)
+    expect(messages[0].content).toBe("Msg 3");
+    expect(messages[1].content).toBe("Msg 4");
+    expect(messages[2].content).toBe("Msg 5");
+  });
+
+  it("should return messages in ASC order even when limit is used (subquery pattern)", () => {
+    addSessionMessage(db, { session_id: session.id, role: "user", content: "A" });
+    addSessionMessage(db, { session_id: session.id, role: "assistant", content: "B" });
+    addSessionMessage(db, { session_id: session.id, role: "user", content: "C" });
+    addSessionMessage(db, { session_id: session.id, role: "assistant", content: "D" });
+
+    const messages = loadSessionMessages(db, session.id, { limit: 2 });
+
+    expect(messages).toHaveLength(2);
+    // Last 2 messages: C, D -- in ASC order
+    expect(messages[0].content).toBe("C");
+    expect(messages[1].content).toBe("D");
+    // IDs should be ascending
+    expect(messages[0].id).toBeLessThan(messages[1].id);
+  });
+
+  it("should default to 50 messages when no limit is provided", () => {
+    // Insert 55 messages
+    for (let i = 1; i <= 55; i++) {
+      addSessionMessage(db, {
+        session_id: session.id,
+        role: i % 2 === 1 ? "user" : "assistant",
+        content: `Message ${i}`,
+      });
+    }
+
+    const messages = loadSessionMessages(db, session.id);
+
+    // Default limit is 50, so we get the last 50 messages
+    expect(messages).toHaveLength(50);
+    // First message returned should be Message 6 (the 6th out of 55)
+    expect(messages[0].content).toBe("Message 6");
+    // Last should be Message 55
+    expect(messages[49].content).toBe("Message 55");
+  });
+
+  it("should return empty array for nonexistent session", () => {
+    const messages = loadSessionMessages(db, "nonexistent");
+
+    expect(messages).toEqual([]);
+  });
+
+  it("should only return messages for the specified session", () => {
+    const otherSession = createSession(db, { agent_id: "claude-code", name: "Other" });
+
+    addSessionMessage(db, { session_id: session.id, role: "user", content: "Session 1 msg" });
+    addSessionMessage(db, { session_id: otherSession.id, role: "user", content: "Session 2 msg" });
+
+    const messages = loadSessionMessages(db, session.id);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toBe("Session 1 msg");
+    expect(messages[0].session_id).toBe(session.id);
+  });
+
+  it("should parse tool_calls and metadata JSON in loaded messages", () => {
+    const toolCalls = [{ id: "call_x", type: "function", function: { name: "test", arguments: "{}" } }];
+    addSessionMessage(db, {
+      session_id: session.id,
+      role: "assistant",
+      content: "Using tool",
+      tool_calls: toolCalls,
+      metadata: { tokens: 100 },
+    });
+
+    const messages = loadSessionMessages(db, session.id);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].tool_calls).toEqual(toolCalls);
+    expect(messages[0].metadata).toEqual({ tokens: 100 });
+  });
+
+  it("should return null for tool_calls and metadata when not set", () => {
+    addSessionMessage(db, {
+      session_id: session.id,
+      role: "user",
+      content: "Plain message",
+    });
+
+    const messages = loadSessionMessages(db, session.id);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].tool_calls).toBeNull();
+    expect(messages[0].metadata).toBeNull();
   });
 });
