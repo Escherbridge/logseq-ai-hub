@@ -219,7 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 1.7: Add Test Helpers for Sessions
+### Task 1.7: Add Test Helpers for Sessions [x] [2de71fc]
 
 **TDD Cycle:** No test for helpers themselves -- verify by using them in subsequent tests.
 
