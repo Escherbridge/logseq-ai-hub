@@ -145,7 +145,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 1.4: Implement Session Data Access -- List and Update
+### Task 1.4: Implement Session Data Access -- List and Update [x] [965fc1e]
 
 **TDD Cycle:**
 - RED: Write tests for `listSessions(db, agentId, opts)` and `updateSession(db, id, updates)`.
