@@ -74,6 +74,26 @@ export interface CreateSessionParams {
 }
 
 /**
+ * Options for listing sessions. All fields are optional filters.
+ */
+export interface ListSessionsOptions {
+  status?: SessionStatus;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Mutable fields that can be updated on a session.
+ * All fields are optional -- only provided fields are changed.
+ */
+export interface UpdateSessionParams {
+  name?: string;
+  status?: SessionStatus;
+  context?: SessionContext;
+  last_active_at?: string;
+}
+
+/**
  * Parameters for adding a message to a session.
  */
 export interface AddMessageParams {

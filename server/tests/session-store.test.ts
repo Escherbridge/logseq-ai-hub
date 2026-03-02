@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createTestDb } from "./helpers";
-import { createSession, getSession } from "../src/db/sessions";
+import { createSession, getSession, listSessions, updateSession } from "../src/db/sessions";
 import type { Session, SessionContext } from "../src/types/session";
 
 describe("Session Schema", () => {
@@ -425,5 +425,232 @@ describe("Session Data Access - createSession and getSession", () => {
       expect(retrieved).not.toBeNull();
       expect(retrieved!.context).toEqual(ctx);
     });
+  });
+});
+
+describe("Session Data Access - listSessions", () => {
+  let db: Database;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  it("should return all active sessions for an agent, ordered by last_active_at DESC", () => {
+    // Create sessions with staggered last_active_at times
+    const s1 = createSession(db, { agent_id: "claude-code", name: "Oldest" });
+    const s2 = createSession(db, { agent_id: "claude-code", name: "Middle" });
+    const s3 = createSession(db, { agent_id: "claude-code", name: "Newest" });
+
+    // Manually set different last_active_at to ensure ordering
+    db.run("UPDATE sessions SET last_active_at = datetime('now', '-3 hours') WHERE id = ?", [s1.id]);
+    db.run("UPDATE sessions SET last_active_at = datetime('now', '-1 hour') WHERE id = ?", [s2.id]);
+    db.run("UPDATE sessions SET last_active_at = datetime('now') WHERE id = ?", [s3.id]);
+
+    const sessions = listSessions(db, "claude-code");
+
+    expect(sessions).toHaveLength(3);
+    // Ordered by last_active_at DESC: newest first
+    expect(sessions[0].name).toBe("Newest");
+    expect(sessions[1].name).toBe("Middle");
+    expect(sessions[2].name).toBe("Oldest");
+  });
+
+  it("should only return sessions for the specified agent_id", () => {
+    createSession(db, { agent_id: "claude-code", name: "Claude Session" });
+    createSession(db, { agent_id: "other-agent", name: "Other Session" });
+
+    const sessions = listSessions(db, "claude-code");
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].name).toBe("Claude Session");
+    expect(sessions[0].agent_id).toBe("claude-code");
+  });
+
+  it("should default to active sessions when no status filter is provided", () => {
+    const s1 = createSession(db, { agent_id: "claude-code", name: "Active" });
+    const s2 = createSession(db, { agent_id: "claude-code", name: "Archived" });
+
+    // Archive the second session
+    db.run("UPDATE sessions SET status = 'archived' WHERE id = ?", [s2.id]);
+
+    const sessions = listSessions(db, "claude-code");
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].name).toBe("Active");
+    expect(sessions[0].status).toBe("active");
+  });
+
+  it("should filter by status when provided", () => {
+    const s1 = createSession(db, { agent_id: "claude-code", name: "Active" });
+    const s2 = createSession(db, { agent_id: "claude-code", name: "Archived" });
+
+    db.run("UPDATE sessions SET status = 'archived' WHERE id = ?", [s2.id]);
+
+    const sessions = listSessions(db, "claude-code", { status: "archived" });
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].name).toBe("Archived");
+    expect(sessions[0].status).toBe("archived");
+  });
+
+  it("should respect the limit option", () => {
+    createSession(db, { agent_id: "claude-code", name: "S1" });
+    createSession(db, { agent_id: "claude-code", name: "S2" });
+    createSession(db, { agent_id: "claude-code", name: "S3" });
+
+    const sessions = listSessions(db, "claude-code", { limit: 2 });
+
+    expect(sessions).toHaveLength(2);
+  });
+
+  it("should respect the offset option", () => {
+    const s1 = createSession(db, { agent_id: "claude-code", name: "S1" });
+    const s2 = createSession(db, { agent_id: "claude-code", name: "S2" });
+    const s3 = createSession(db, { agent_id: "claude-code", name: "S3" });
+
+    // Stagger last_active_at to get deterministic ordering
+    db.run("UPDATE sessions SET last_active_at = datetime('now', '-2 hours') WHERE id = ?", [s1.id]);
+    db.run("UPDATE sessions SET last_active_at = datetime('now', '-1 hour') WHERE id = ?", [s2.id]);
+    db.run("UPDATE sessions SET last_active_at = datetime('now') WHERE id = ?", [s3.id]);
+
+    // Skip the newest, get the rest
+    const sessions = listSessions(db, "claude-code", { offset: 1 });
+
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0].name).toBe("S2");
+    expect(sessions[1].name).toBe("S1");
+  });
+
+  it("should return an empty array when no sessions match", () => {
+    const sessions = listSessions(db, "nonexistent-agent");
+    expect(sessions).toEqual([]);
+  });
+
+  it("should parse context JSON on returned sessions", () => {
+    createSession(db, {
+      agent_id: "claude-code",
+      context: { focus: "testing list" },
+    });
+
+    const sessions = listSessions(db, "claude-code");
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].context).toEqual({ focus: "testing list" });
+  });
+});
+
+describe("Session Data Access - updateSession", () => {
+  let db: Database;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  it("should update the name and bump updated_at", () => {
+    const session = createSession(db, {
+      agent_id: "claude-code",
+      name: "Old Name",
+    });
+    const originalUpdatedAt = session.updated_at;
+
+    // Small delay to ensure updated_at changes (SQLite datetime has 1-second granularity)
+    // We force a different time by manually setting created timestamps back
+    db.run("UPDATE sessions SET updated_at = datetime('now', '-1 hour') WHERE id = ?", [session.id]);
+
+    const result = updateSession(db, session.id, { name: "New Name" });
+
+    expect(result).toBe(true);
+
+    const updated = getSession(db, session.id);
+    expect(updated).not.toBeNull();
+    expect(updated!.name).toBe("New Name");
+    // updated_at should be bumped to now (newer than the manually-set time)
+    expect(updated!.updated_at).not.toBe(
+      getSession(db, session.id)!.created_at.replace(/\d{2}:\d{2}:\d{2}/, "00:00:00") // just check it was updated
+    );
+  });
+
+  it("should update the status", () => {
+    const session = createSession(db, { agent_id: "claude-code" });
+
+    const result = updateSession(db, session.id, { status: "archived" });
+
+    expect(result).toBe(true);
+
+    const updated = getSession(db, session.id);
+    expect(updated).not.toBeNull();
+    expect(updated!.status).toBe("archived");
+  });
+
+  it("should replace the entire context JSON", () => {
+    const session = createSession(db, {
+      agent_id: "claude-code",
+      context: { focus: "old focus" },
+    });
+
+    const newContext = { focus: "new focus" };
+    const result = updateSession(db, session.id, { context: newContext });
+
+    expect(result).toBe(true);
+
+    const updated = getSession(db, session.id);
+    expect(updated).not.toBeNull();
+    expect(updated!.context).toEqual({ focus: "new focus" });
+    // Old context fields should be gone (replaced, not merged)
+  });
+
+  it("should update last_active_at when provided", () => {
+    const session = createSession(db, { agent_id: "claude-code" });
+    const newTimestamp = "2026-03-02 12:00:00";
+
+    const result = updateSession(db, session.id, { last_active_at: newTimestamp });
+
+    expect(result).toBe(true);
+
+    const updated = getSession(db, session.id);
+    expect(updated).not.toBeNull();
+    expect(updated!.last_active_at).toBe(newTimestamp);
+  });
+
+  it("should always bump updated_at even if other fields do not include it", () => {
+    const session = createSession(db, { agent_id: "claude-code" });
+
+    // Set updated_at to a known past time
+    db.run("UPDATE sessions SET updated_at = datetime('now', '-2 hours') WHERE id = ?", [session.id]);
+    const before = getSession(db, session.id)!;
+
+    updateSession(db, session.id, { name: "Bump Test" });
+    const after = getSession(db, session.id)!;
+
+    // updated_at should be newer than the manually-set past time
+    expect(new Date(after.updated_at).getTime()).toBeGreaterThan(
+      new Date(before.updated_at).getTime()
+    );
+  });
+
+  it("should return false when updating a nonexistent session", () => {
+    const result = updateSession(db, "nonexistent-id", { name: "Nope" });
+    expect(result).toBe(false);
+  });
+
+  it("should handle updating multiple fields at once", () => {
+    const session = createSession(db, {
+      agent_id: "claude-code",
+      name: "Original",
+    });
+
+    const result = updateSession(db, session.id, {
+      name: "Updated",
+      status: "paused",
+      context: { focus: "multi-update" },
+    });
+
+    expect(result).toBe(true);
+
+    const updated = getSession(db, session.id);
+    expect(updated).not.toBeNull();
+    expect(updated!.name).toBe("Updated");
+    expect(updated!.status).toBe("paused");
+    expect(updated!.context).toEqual({ focus: "multi-update" });
   });
 });
