@@ -2,6 +2,7 @@ import type { Config } from "./config";
 import type { Database } from "bun:sqlite";
 import type { AgentBridge } from "./services/agent-bridge";
 import type { ConversationStore } from "./services/conversations";
+import type { ApprovalStore } from "./services/approval-store";
 import { handleHealth } from "./routes/health";
 import {
   handleWhatsAppVerify,
@@ -18,6 +19,7 @@ import { handleListMCPServers, handleListMCPTools, handleListMCPResources } from
 import { handleAgentChat } from "./routes/api/agent-chat";
 import { handleListSecretKeys, handleSetSecret, handleRemoveSecret, handleCheckSecret } from "./routes/api/secrets";
 import { handleMcpRequest, handleMcpDelete, handleMcpConfig } from "./routes/mcp-transport";
+import { handleListApprovals, handleResolveApproval, handleCancelApproval, handleAskApproval } from "./routes/api/approvals";
 import { matchRoute } from "./router/match";
 
 export interface RouteContext {
@@ -25,6 +27,7 @@ export interface RouteContext {
   db: Database;
   agentBridge?: AgentBridge;
   conversations?: ConversationStore;
+  approvalStore?: ApprovalStore;
   traceId?: string;
 }
 
@@ -61,12 +64,12 @@ export function createRouter(ctx: RouteContext) {
     {
       method: "POST",
       pattern: "/webhook/whatsapp",
-      handler: (req, ctx) => handleWhatsAppWebhook(req, ctx.config, ctx.db),
+      handler: (req, ctx) => handleWhatsAppWebhook(req, ctx.config, ctx.db, ctx.approvalStore),
     },
     {
       method: "POST",
       pattern: "/webhook/telegram",
-      handler: (req, ctx) => handleTelegramWebhook(req, ctx.config, ctx.db),
+      handler: (req, ctx) => handleTelegramWebhook(req, ctx.config, ctx.db, ctx.approvalStore),
     },
     {
       method: "GET",
@@ -181,6 +184,39 @@ export function createRouter(ctx: RouteContext) {
       method: "GET",
       pattern: "/api/secrets/:key/check",
       handler: (req, ctx, params) => handleCheckSecret(req, ctx.config, ctx.agentBridge, params, ctx.traceId),
+    },
+    // Approvals API
+    {
+      method: "GET",
+      pattern: "/api/approvals",
+      handler: (req, ctx) => {
+        if (!ctx.approvalStore) return Response.json({ success: false, error: "Approval store not initialized" }, { status: 503 });
+        return handleListApprovals(req, ctx.config, ctx.approvalStore);
+      },
+    },
+    {
+      method: "POST",
+      pattern: "/api/approvals/ask",
+      handler: (req, ctx) => {
+        if (!ctx.approvalStore) return Response.json({ success: false, error: "Approval store not initialized" }, { status: 503 });
+        return handleAskApproval(req, ctx.config, ctx.approvalStore, ctx.db);
+      },
+    },
+    {
+      method: "POST",
+      pattern: "/api/approvals/:id/resolve",
+      handler: (req, ctx, params) => {
+        if (!ctx.approvalStore) return Response.json({ success: false, error: "Approval store not initialized" }, { status: 503 });
+        return handleResolveApproval(req, ctx.config, ctx.approvalStore, params);
+      },
+    },
+    {
+      method: "DELETE",
+      pattern: "/api/approvals/:id",
+      handler: (req, ctx, params) => {
+        if (!ctx.approvalStore) return Response.json({ success: false, error: "Approval store not initialized" }, { status: 503 });
+        return handleCancelApproval(req, ctx.config, ctx.approvalStore, params);
+      },
     },
     // Agent Chat API
     {

@@ -3,6 +3,7 @@
    Converts MCP tool definitions to OpenAI format, handles the tool-call loop,
    and routes tool calls back to the correct MCP server."
   (:require [logseq-ai-hub.mcp.client :as mcp-client]
+            [logseq-ai-hub.registry.bridge :as registry-bridge]
             [clojure.string :as str]))
 
 (def ^:private max-tool-rounds 10)
@@ -94,10 +95,30 @@
         arguments (try
                     (js->clj (js/JSON.parse args-str) :keywordize-keys true)
                     (catch :default _ {}))]
-    (if (nil? server-id)
+    (cond
+      ;; Skill tool: route to registry bridge
+      (= "skill" server-id)
+      (let [skill-id (str "Skills/" tool-name)]
+        (-> (registry-bridge/handle-execute-skill
+              {"skillId" skill-id "inputs" (clj->js arguments)})
+            (.then (fn [result]
+                     {:tool-call-id call-id
+                      :content (if (string? result)
+                                 result
+                                 (js/JSON.stringify (clj->js result)))}))
+            (.catch (fn [err]
+                      {:tool-call-id call-id
+                       :content (str "Error calling skill " tool-name ": "
+                                     (if (instance? js/Error err) (.-message err) (str err)))}))))
+
+      ;; No server ID: error
+      (nil? server-id)
       (js/Promise.resolve
         {:tool-call-id call-id
          :content (str "Error: Could not determine server for tool: " namespaced-name)})
+
+      ;; MCP server tool: route to MCP client
+      :else
       (-> (mcp-client/call-tool server-id tool-name (clj->js arguments))
           (.then (fn [result]
                    (let [content-parts (:content result)

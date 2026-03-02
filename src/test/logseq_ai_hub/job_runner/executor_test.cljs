@@ -535,3 +535,83 @@
                   (is (some? err) "Should reject with error")
                   (is (.includes (str err) "MCP client not initialized"))
                   (done))))))
+
+(deftest ask-human-executor-test
+  (testing "ask-human not initialized"
+    (async done
+      (set! executor/*ask-human-fn* nil)
+      (-> (executor/execute-step {:step-action :ask-human
+                                  :step-config {"contact" "whatsapp:123"
+                                                "question" "Deploy?"}}
+                                 {})
+          (.catch (fn [err]
+                    (is (= :ask-human-not-initialized (.-type err)))
+                    (done))))))
+
+  (testing "ask-human success"
+    (async done
+      (set! executor/*ask-human-fn*
+            (fn [params]
+              (is (= "whatsapp:123" (:contact params)))
+              (is (= "Deploy to production?" (:question params)))
+              (js/Promise.resolve #js {:status "approved" :response "yes"})))
+      (-> (executor/execute-step {:step-action :ask-human
+                                  :step-config {"contact" "whatsapp:123"
+                                                "question" "Deploy to production?"}}
+                                 {})
+          (.then (fn [result]
+                   (is (= "approved" (:status result)))
+                   (is (= "yes" (:response result)))
+                   (set! executor/*ask-human-fn* nil)
+                   (done))))))
+
+  (testing "ask-human timeout with fail (default)"
+    (async done
+      (set! executor/*ask-human-fn*
+            (fn [_params]
+              (js/Promise.resolve #js {:status "timeout" :response nil})))
+      (-> (executor/execute-step {:step-action :ask-human
+                                  :step-config {"contact" "whatsapp:123"
+                                                "question" "Approve?"}}
+                                 {})
+          (.catch (fn [err]
+                    (is (= :approval-timeout (.-type err)))
+                    (set! executor/*ask-human-fn* nil)
+                    (done))))))
+
+  (testing "ask-human timeout with continue"
+    (async done
+      (set! executor/*ask-human-fn*
+            (fn [_params]
+              (js/Promise.resolve #js {:status "timeout" :response nil})))
+      (-> (executor/execute-step {:step-action :ask-human
+                                  :step-config {"contact" "whatsapp:123"
+                                                "question" "Approve?"
+                                                "on-timeout" "continue"}}
+                                 {})
+          (.then (fn [result]
+                   (is (= "timeout" (:status result)))
+                   (is (true? (:continued result)))
+                   (set! executor/*ask-human-fn* nil)
+                   (done))))))
+
+  (testing "ask-human with interpolation"
+    (async done
+      (set! executor/*ask-human-fn*
+            (fn [params]
+              (is (= "John" (:contact params)))
+              (is (= "Deploy v1.2.3?" (:question params)))
+              (js/Promise.resolve #js {:status "approved" :response "go"})))
+      (-> (executor/execute-step {:step-action :ask-human
+                                  :step-config {"contact" "{{deployer}}"
+                                                "question" "Deploy {{version}}?"}}
+                                 {:variables {"deployer" "John"
+                                              "version" "v1.2.3"}})
+          (.then (fn [result]
+                   (is (= "approved" (:status result)))
+                   (set! executor/*ask-human-fn* nil)
+                   (done)))))))
+
+(deftest ask-human-registered-test
+  (testing "ask-human is registered"
+    (is (some? (get @executor/step-executors :ask-human)))))

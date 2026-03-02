@@ -33,7 +33,11 @@
       "Bash(npx tsc:*)",
       "Bash(./node_modules/.bin/tsc:*)",
       "Bash(xargs:*)",
-      "Bash(bun add:*)"
+      "Bash(bun add:*)",
+      "WebFetch(domain:www.electronjs.org)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:plugins-doc.logseq.com)",
+      "WebFetch(domain:developer.mamezou-tech.com)"
     ]
   }
 }

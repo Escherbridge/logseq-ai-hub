@@ -47,11 +47,11 @@
 
 (deftest parse-llm-args-empty-content
   (testing "handles nil and empty content"
-    (is (= {:mcp-refs [] :memory-refs [] :page-refs [] :options {} :prompt ""}
+    (is (= {:mcp-refs [] :memory-refs [] :skill-refs [] :page-refs [] :options {} :prompt ""}
            (arg-parser/parse-llm-args nil)))
-    (is (= {:mcp-refs [] :memory-refs [] :page-refs [] :options {} :prompt ""}
+    (is (= {:mcp-refs [] :memory-refs [] :skill-refs [] :page-refs [] :options {} :prompt ""}
            (arg-parser/parse-llm-args "")))
-    (is (= {:mcp-refs [] :memory-refs [] :page-refs [] :options {} :prompt ""}
+    (is (= {:mcp-refs [] :memory-refs [] :skill-refs [] :page-refs [] :options {} :prompt ""}
            (arg-parser/parse-llm-args "  ")))))
 
 (deftest parse-llm-args-collapses-whitespace
@@ -104,6 +104,52 @@
       (is (= ["AI-Memory/notes"] (:memory-refs result)))
       (is (= ["Project Spec"] (:page-refs result)))
       (is (= "research this" (:prompt result))))))
+
+;; ---------------------------------------------------------------------------
+;; Skill reference tests
+;; ---------------------------------------------------------------------------
+
+(deftest parse-llm-args-single-skill-ref
+  (testing "extracts single Skill reference"
+    (let [result (arg-parser/parse-llm-args "[[Skills/summarize]] Summarize this document")]
+      (is (= ["Skills/summarize"] (:skill-refs result)))
+      (is (= [] (:mcp-refs result)))
+      (is (= [] (:memory-refs result)))
+      (is (= "Summarize this document" (:prompt result))))))
+
+(deftest parse-llm-args-multiple-skill-refs
+  (testing "extracts multiple Skill references"
+    (let [result (arg-parser/parse-llm-args "[[Skills/summarize]] [[Skills/translate]] Process this")]
+      (is (= ["Skills/summarize" "Skills/translate"] (:skill-refs result)))
+      (is (= "Process this" (:prompt result))))))
+
+(deftest parse-llm-args-skills-with-mcp-and-memory
+  (testing "extracts skill refs alongside MCP and Memory refs"
+    (let [result (arg-parser/parse-llm-args
+                   "[[MCP/brave]] [[AI-Memory/notes]] [[Skills/summarize]] Do research")]
+      (is (= ["MCP/brave"] (:mcp-refs result)))
+      (is (= ["AI-Memory/notes"] (:memory-refs result)))
+      (is (= ["Skills/summarize"] (:skill-refs result)))
+      (is (= "Do research" (:prompt result))))))
+
+(deftest parse-llm-args-skills-not-in-page-refs
+  (testing "skill refs are not included in generic page-refs"
+    (let [result (arg-parser/parse-llm-args "[[Skills/foo]] [[My Page]] question")]
+      (is (= ["Skills/foo"] (:skill-refs result)))
+      (is (= ["My Page"] (:page-refs result)))
+      (is (not (some #{"Skills/foo"} (:page-refs result)))))))
+
+(deftest has-special-refs-with-skills
+  (testing "has-special-refs? detects skill references"
+    (is (true? (arg-parser/has-special-refs?
+                 {:mcp-refs [] :memory-refs [] :skill-refs ["Skills/x"]})))
+    (is (false? (arg-parser/has-special-refs?
+                  {:mcp-refs [] :memory-refs [] :skill-refs []})))))
+
+(deftest has-context-refs-with-skills
+  (testing "has-context-refs? detects skill references"
+    (is (true? (arg-parser/has-context-refs?
+                 {:mcp-refs [] :memory-refs [] :skill-refs ["Skills/x"] :page-refs []})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Inline option tests

@@ -74,25 +74,27 @@
 - **Depends on:** job-runner_20260219 (MCP client, parser, interpolation), secrets-manager_20260221 (`{{secret.KEY}}` interpolation)
 - **Description:** Dynamic argument parser preprocesses `/LLM` block content, detecting `[[MCP/...]]`, `[[AI-Memory/...]]`, and `[[Page Name]]` references. MCP refs connect on-demand servers with multi-turn tool calling. Memory refs inject curated context. Page refs fetch block trees with BFS link traversal (configurable depth via `depth:N`) and token budgets (configurable via `max-tokens:N`). All three chainable in a single block. Moved MCP from `job_runner/mcp/` to top-level `mcp/` namespace. Universal `enriched/call` entry point reusable by all plugin-side commands including sub-agents. New plugin settings for `pageRefDepth` and `pageRefMaxTokens`.
 
-## Active Tracks
-
 ### human-in-loop_20260221 -- Human-in-the-Loop Approval Flow
-- **Status:** planned
-- **Branch:** `track/human-in-loop_20260221`
+- **Status:** completed
+- **Branch:** `main`
 - **Priority:** P0 (critical path)
 - **Estimated:** 12-18 hours
 - **Depends on:** mcp-server_20260221 (MCP tool exposure), webhook-agent-api_20260219 (messaging, webhooks)
 - **Spec:** [spec.md](tracks/human-in-loop_20260221/spec.md)
-- **Description:** Bidirectional human approval system: agents send questions/approval requests to humans via WhatsApp/Telegram, wait for the reply, and resume execution with the response. Implements a pending approval store, webhook reply correlation, `ask_human` MCP tool, job runner `:ask-human` step action, structured choice support, and approval monitoring via REST and SSE events.
+- **Plan:** [plan.md](tracks/human-in-loop_20260221/plan.md)
+- **Description:** Bidirectional human approval system: agents send questions/approval requests to humans via WhatsApp/Telegram, wait for the reply, and resume execution with the response. In-memory approval store with Promise-based blocking, FIFO resolution, options validation, per-contact (5) and total (100) limits, timeout auto-resolution. `ask_human` MCP tool with contact resolution and message formatting. Webhook-to-approval correlation for WhatsApp and Telegram. REST API for approval management (`GET /api/approvals`, `POST /api/approvals/ask`, `POST /api/approvals/:id/resolve`, `DELETE /api/approvals/:id`). SSE events for approval lifecycle. Job runner `:ask-human` step action type. 98 new tests, 224 total server tests passing.
 
 ### kb-tool-registry_20260221 -- Knowledge Base as Living Tool Registry
-- **Status:** planned
-- **Branch:** `track/kb-tool-registry_20260221`
+- **Status:** completed
+- **Branch:** `main`
 - **Priority:** P1
 - **Estimated:** 15-22 hours
 - **Depends on:** mcp-server_20260221 (MCP tool exposure), job-runner_20260219 (skill page format), dynamic-arg-parser_20260222 (`[[Page]]` ref pattern for prompt templates)
 - **Spec:** [spec.md](tracks/kb-tool-registry_20260221/spec.md)
-- **Description:** Transform the Logseq knowledge base into a dynamic capability registry. Logseq pages with specific tags become discoverable tools, skills, prompts, agents, and procedures. Implements a registry scanner, dynamic MCP tool registration from pages, prompt page convention, procedure pages, and registry query tools. Skills are automatically wrapped as MCP tools. Agents can create new tools via `register_tool`.
+- **Plan:** [plan.md](tracks/kb-tool-registry_20260221/plan.md)
+- **Description:** Dynamic capability registry transforming Logseq pages into discoverable MCP tools, prompts, and resources. Plugin-side registry with atom-based store, tag-based scanner, parsers for tool/prompt/procedure pages, bridge operations for CRUD+search+refresh. Server-side registry query MCP tools (4 tools: `registry_list`, `registry_search`, `registry_get`, `registry_refresh`), `DynamicRegistry` class for syncing page-defined tools/prompts/resources into MCP. Skills auto-wrapped as MCP tools with `skill_` prefix. Debounced DB watcher for auto-discovery. 29 MCP tools total. New files: 8 plugin source + 8 plugin tests + 2 server source. 224 server tests, 32 pre-existing ClojureScript failures unchanged.
+
+## Active Tracks
 
 ### agent-sessions_20260221 -- Claude Code Agent Session Management
 - **Status:** planned
@@ -138,7 +140,7 @@ core-arch (done) ──▶ job-runner (done) ──▶ webhook-agent-api (done)
                           │             ╱     │
                           │            ╱      │
                           │   human-in-loop  kb-tool-registry
-                          │      (P0)           (P1)
+                          │      (done)          (done)
                           │         ╲          ╱
                           │          ╲        ╱
                           └──────▶ code-repo-integration (P2)
@@ -151,8 +153,8 @@ core-arch (done) ──▶ job-runner (done) ──▶ webhook-agent-api (done)
 2. ~~**secrets-manager**~~ — Done. Vault in plugin settings, `{{secret.KEY}}` interpolation, slash commands, Agent Bridge ops, server API with rate limiting, redaction utilities.
 3. ~~**mcp-server**~~ — Done. 24 MCP tools, 5 resources, 4 prompts, WebStandardStreamableHTTPServerTransport, session management, config discovery. 59 tests passing.
 4. ~~**dynamic-arg-parser**~~ — Done. `[[MCP/...]]`, `[[AI-Memory/...]]`, `[[Page]]` refs in `/LLM` blocks. On-demand MCP, multi-turn tool calling, BFS page traversal, token budgets, universal `enriched/call`. Sub-agents support all ref types.
-5. **human-in-loop** — Enables the "ask for permission" flow. Can be built in parallel with #6.
-6. **kb-tool-registry** — Makes the knowledge base dynamic and self-describing. Leverages `[[Page]]` ref pattern for prompt templates. Can be built in parallel with #5.
+5. ~~**human-in-loop**~~ — Done. Approval store, `ask_human` MCP tool, webhook correlation, REST API, SSE events, `:ask-human` executor. 98 new tests.
+6. ~~**kb-tool-registry**~~ — Done. Dynamic registry with plugin-side store, scanner, parsers, bridge ops. Server-side registry query tools (4) + DynamicRegistry class for syncing tools/prompts/resources. Skills auto-wrapped as MCP tools. Debounced DB watcher. 29 total MCP tools.
 7. **agent-sessions** — Persistent, context-rich sessions. Uses `graph-context/resolve-page-refs` for session context enrichment.
 8. **code-repo-integration** — Orchestration layer for coding workflows. `[[Page]]` refs replace explicit graph-query steps in skills. Builds on #5, #6.
 9. **iot-infra-hooks** — Generic infrastructure integration. Runbook `[[Page]]` refs for alert context. Builds on #2, #5, #6.

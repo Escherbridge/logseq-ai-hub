@@ -14,6 +14,10 @@
   "scripts": {
     "watch": "npx shadow-cljs watch app",
     "release": "npx shadow-cljs release app",
-    "test": "npx shadow-cljs compile node-test && node out/test/node-tests.js"
+    "test": "npx shadow-cljs compile node-test && node out/test/node-tests.js",
+    "test:compile": "npx shadow-cljs compile node-test",
+    "test:run": "node out/test/node-tests.js",
+    "test:server": "cd server && bun test",
+    "test:all": "npm run test && npm run test:server"
   }
 }

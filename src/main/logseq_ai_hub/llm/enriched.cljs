@@ -6,6 +6,7 @@
             [logseq-ai-hub.llm.memory-context :as memory-context]
             [logseq-ai-hub.llm.tool-use :as tool-use]
             [logseq-ai-hub.mcp.on-demand :as on-demand]
+            [logseq-ai-hub.registry.store :as registry-store]
             [logseq-ai-hub.agent :as agent]
             [clojure.string :as str]))
 
@@ -17,6 +18,29 @@
     (when (seq non-nil)
       (str/join "\n\n" non-nil))))
 
+(defn- resolve-skill-tools
+  "Looks up skill refs in the registry store and returns tool definitions
+   in the server-tools format expected by tool-use/handle-tool-use-request.
+   Returns [{:server-id \"skill\" :tools [{:name :description :inputSchema}]}]."
+  [skill-refs]
+  (when (seq skill-refs)
+    (let [tools (reduce
+                  (fn [acc skill-ref]
+                    (let [entry (registry-store/get-entry :skill skill-ref)]
+                      (if entry
+                        (conj acc {:name (:name entry)
+                                   :description (or (:description entry)
+                                                    (str "Execute skill: " (:name entry)))
+                                   :inputSchema (or (:input-schema entry)
+                                                    {:type "object"
+                                                     :properties {"input" {:type "string"
+                                                                          :description "Input for the skill"}}})})
+                        acc)))
+                  []
+                  skill-refs)]
+      (when (seq tools)
+        [{:server-id "skill" :tools tools}]))))
+
 (defn call
   "Universal enriched LLM entry point.
    Takes raw block content, parses refs, resolves all context, calls LLM.
@@ -26,16 +50,18 @@
    - :model-id  — override model (default: from settings 'selectedModel')
    - :extra-system-prompt — additional system prompt text to prepend"
   [content & {:keys [model-id extra-system-prompt]}]
-  (let [{:keys [mcp-refs memory-refs page-refs options prompt]}
+  (let [{:keys [mcp-refs memory-refs skill-refs page-refs options prompt]}
           (arg-parser/parse-llm-args content)
         effective-model (or model-id "llm-model")]
     (if-not (or (arg-parser/has-context-refs?
-                  {:mcp-refs mcp-refs :memory-refs memory-refs :page-refs page-refs})
+                  {:mcp-refs mcp-refs :memory-refs memory-refs
+                   :skill-refs skill-refs :page-refs page-refs})
                 extra-system-prompt)
       ;; Simple path: no refs and no extra system prompt
       (agent/process-input prompt effective-model)
-      ;; Enriched path: resolve context + optional MCP tools
-      (let [connected-ids (atom nil)]
+      ;; Enriched path: resolve context + optional MCP/skill tools
+      (let [connected-ids (atom nil)
+            skill-tools (resolve-skill-tools skill-refs)]
         (-> (js/Promise.all
               #js [(memory-context/resolve-memory-refs memory-refs)
                    (graph-context/resolve-page-refs page-refs options)
@@ -48,13 +74,16 @@
             (.then (fn [results]
                      (let [memory-prompt (aget results 0)
                            page-prompt   (aget results 1)
-                           server-tools  (js->clj (aget results 2))
+                           mcp-tools     (js->clj (aget results 2))
+                           ;; Merge MCP tools with skill tools
+                           all-tools     (into (vec mcp-tools)
+                                               (or skill-tools []))
                            system-prompt (apply merge-system-prompts
                                            (filter some? [extra-system-prompt
                                                           memory-prompt
                                                           page-prompt]))]
-                       (if (seq server-tools)
-                         (tool-use/handle-tool-use-request prompt server-tools system-prompt)
+                       (if (seq all-tools)
+                         (tool-use/handle-tool-use-request prompt all-tools system-prompt)
                          (if system-prompt
                            (agent/process-with-system-prompt prompt system-prompt)
                            (agent/process-input prompt effective-model))))))
