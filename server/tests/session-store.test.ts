@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createTestDb } from "./helpers";
 import { createSession, getSession, listSessions, updateSession, addSessionMessage, loadSessionMessages } from "../src/db/sessions";
+import { SessionStore } from "../src/services/session-store";
 import type { Session, SessionContext, SessionMessage } from "../src/types/session";
 
 describe("Session Schema", () => {
@@ -900,5 +901,275 @@ describe("Session Data Access - loadSessionMessages", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0].tool_calls).toBeNull();
     expect(messages[0].metadata).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SessionStore class tests (Task 1.6)
+// ---------------------------------------------------------------------------
+
+describe("SessionStore", () => {
+  let db: Database;
+  let store: SessionStore;
+
+  beforeEach(() => {
+    db = createTestDb();
+    store = new SessionStore(db);
+  });
+
+  describe("create", () => {
+    it("should create and return a session with minimal params", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      expect(session.id).toBeDefined();
+      expect(session.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+      );
+      expect(session.agent_id).toBe("claude-code");
+      expect(session.status).toBe("active");
+      expect(session.name).toBeNull();
+      expect(session.context).toEqual({});
+    });
+
+    it("should create a session with name and context", () => {
+      const session = store.create({
+        agent_id: "claude-code",
+        name: "API Refactor",
+        context: { focus: "refactoring endpoints" },
+      });
+
+      expect(session.name).toBe("API Refactor");
+      expect(session.context).toEqual({ focus: "refactoring endpoints" });
+    });
+  });
+
+  describe("get", () => {
+    it("should retrieve a session by id", () => {
+      const created = store.create({ agent_id: "claude-code", name: "Test" });
+
+      const retrieved = store.get(created.id);
+
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.id).toBe(created.id);
+      expect(retrieved!.name).toBe("Test");
+      expect(retrieved!.agent_id).toBe("claude-code");
+    });
+
+    it("should return null for a nonexistent id", () => {
+      const result = store.get("nonexistent-id");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("list", () => {
+    it("should return active sessions only by default", () => {
+      const active = store.create({ agent_id: "claude-code", name: "Active" });
+      const archived = store.create({ agent_id: "claude-code", name: "Archived" });
+      store.archive(archived.id);
+
+      const sessions = store.list("claude-code");
+
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].name).toBe("Active");
+      expect(sessions[0].status).toBe("active");
+    });
+
+    it("should return archived sessions when status filter is provided", () => {
+      store.create({ agent_id: "claude-code", name: "Active" });
+      const archived = store.create({ agent_id: "claude-code", name: "Archived" });
+      store.archive(archived.id);
+
+      const sessions = store.list("claude-code", { status: "archived" });
+
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].name).toBe("Archived");
+      expect(sessions[0].status).toBe("archived");
+    });
+
+    it("should only return sessions for the specified agent", () => {
+      store.create({ agent_id: "claude-code", name: "Claude" });
+      store.create({ agent_id: "other-agent", name: "Other" });
+
+      const sessions = store.list("claude-code");
+
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].agent_id).toBe("claude-code");
+    });
+  });
+
+  describe("update", () => {
+    it("should update session fields and return true", () => {
+      const session = store.create({ agent_id: "claude-code", name: "Old" });
+
+      const result = store.update(session.id, { name: "New" });
+
+      expect(result).toBe(true);
+      const updated = store.get(session.id);
+      expect(updated!.name).toBe("New");
+    });
+
+    it("should return false for a nonexistent session", () => {
+      const result = store.update("nonexistent", { name: "Nope" });
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("addMessage", () => {
+    it("should store a message and return it", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      const msg = store.addMessage({
+        session_id: session.id,
+        role: "user",
+        content: "Hello from SessionStore",
+      });
+
+      expect(msg.id).toBeGreaterThan(0);
+      expect(msg.session_id).toBe(session.id);
+      expect(msg.role).toBe("user");
+      expect(msg.content).toBe("Hello from SessionStore");
+    });
+
+    it("should update last_active_at on the session", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      // Set last_active_at to a known past time
+      db.run(
+        "UPDATE sessions SET last_active_at = datetime('now', '-2 hours') WHERE id = ?",
+        [session.id]
+      );
+      const before = store.get(session.id)!;
+
+      store.addMessage({
+        session_id: session.id,
+        role: "user",
+        content: "Activity!",
+      });
+
+      const after = store.get(session.id)!;
+      expect(new Date(after.last_active_at).getTime()).toBeGreaterThan(
+        new Date(before.last_active_at).getTime()
+      );
+    });
+  });
+
+  describe("getMessages", () => {
+    it("should return ordered messages for a session", () => {
+      const session = store.create({ agent_id: "claude-code" });
+      store.addMessage({ session_id: session.id, role: "user", content: "First" });
+      store.addMessage({ session_id: session.id, role: "assistant", content: "Second" });
+      store.addMessage({ session_id: session.id, role: "user", content: "Third" });
+
+      const messages = store.getMessages(session.id);
+
+      expect(messages).toHaveLength(3);
+      expect(messages[0].content).toBe("First");
+      expect(messages[1].content).toBe("Second");
+      expect(messages[2].content).toBe("Third");
+      expect(messages[0].id).toBeLessThan(messages[1].id);
+      expect(messages[1].id).toBeLessThan(messages[2].id);
+    });
+
+    it("should respect the limit option", () => {
+      const session = store.create({ agent_id: "claude-code" });
+      store.addMessage({ session_id: session.id, role: "user", content: "A" });
+      store.addMessage({ session_id: session.id, role: "assistant", content: "B" });
+      store.addMessage({ session_id: session.id, role: "user", content: "C" });
+
+      const messages = store.getMessages(session.id, { limit: 2 });
+
+      expect(messages).toHaveLength(2);
+      // Last 2 messages in ASC order
+      expect(messages[0].content).toBe("B");
+      expect(messages[1].content).toBe("C");
+    });
+
+    it("should return empty array for nonexistent session", () => {
+      const messages = store.getMessages("nonexistent");
+      expect(messages).toEqual([]);
+    });
+  });
+
+  describe("archive", () => {
+    it("should set session status to archived", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      store.archive(session.id);
+
+      const archived = store.get(session.id);
+      expect(archived).not.toBeNull();
+      expect(archived!.status).toBe("archived");
+    });
+
+    it("should cause the session to be excluded from list() default results", () => {
+      const session1 = store.create({ agent_id: "claude-code", name: "Keep" });
+      const session2 = store.create({ agent_id: "claude-code", name: "Archive Me" });
+
+      store.archive(session2.id);
+
+      const sessions = store.list("claude-code");
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].name).toBe("Keep");
+    });
+
+    it("should return true for an existing session", () => {
+      const session = store.create({ agent_id: "claude-code" });
+      const result = store.archive(session.id);
+      expect(result).toBe(true);
+    });
+
+    it("should return false for a nonexistent session", () => {
+      const result = store.archive("nonexistent");
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("touchActivity", () => {
+    it("should update last_active_at to the current time", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      // Set last_active_at to a known past time
+      db.run(
+        "UPDATE sessions SET last_active_at = datetime('now', '-3 hours') WHERE id = ?",
+        [session.id]
+      );
+      const before = store.get(session.id)!;
+
+      store.touchActivity(session.id);
+
+      const after = store.get(session.id)!;
+      expect(new Date(after.last_active_at).getTime()).toBeGreaterThan(
+        new Date(before.last_active_at).getTime()
+      );
+    });
+
+    it("should also bump updated_at", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      // Set both timestamps to a known past time
+      db.run(
+        "UPDATE sessions SET last_active_at = datetime('now', '-3 hours'), updated_at = datetime('now', '-3 hours') WHERE id = ?",
+        [session.id]
+      );
+      const before = store.get(session.id)!;
+
+      store.touchActivity(session.id);
+
+      const after = store.get(session.id)!;
+      expect(new Date(after.updated_at).getTime()).toBeGreaterThan(
+        new Date(before.updated_at).getTime()
+      );
+    });
+
+    it("should return true for an existing session", () => {
+      const session = store.create({ agent_id: "claude-code" });
+      const result = store.touchActivity(session.id);
+      expect(result).toBe(true);
+    });
+
+    it("should return false for a nonexistent session", () => {
+      const result = store.touchActivity("nonexistent");
+      expect(result).toBe(false);
+    });
   });
 });
