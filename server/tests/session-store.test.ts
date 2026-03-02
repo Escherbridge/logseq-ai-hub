@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createTestDb } from "./helpers";
+import { createSession, getSession } from "../src/db/sessions";
+import type { Session, SessionContext } from "../src/types/session";
 
 describe("Session Schema", () => {
   let db: Database;
@@ -286,6 +288,142 @@ describe("Session Schema", () => {
         "SELECT created_at FROM session_messages WHERE session_id = ?"
       ).get("msg-datetime-session") as { created_at: string };
       expect(msg.created_at).toBeTruthy();
+    });
+  });
+});
+
+describe("Session Data Access - createSession and getSession", () => {
+  let db: Database;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  describe("createSession", () => {
+    it("should create a session with minimal params and return a Session with UUID id", () => {
+      const session = createSession(db, { agent_id: "claude-code" });
+
+      expect(session.id).toBeDefined();
+      // UUID format: 8-4-4-4-12 hex characters
+      expect(session.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+      );
+      expect(session.agent_id).toBe("claude-code");
+      expect(session.status).toBe("active");
+      expect(session.name).toBeNull();
+      expect(session.context).toEqual({});
+    });
+
+    it("should store the name when provided", () => {
+      const session = createSession(db, {
+        agent_id: "claude-code",
+        name: "API Refactor",
+      });
+
+      expect(session.name).toBe("API Refactor");
+      expect(session.agent_id).toBe("claude-code");
+    });
+
+    it("should store context as JSON when provided", () => {
+      const ctx: SessionContext = { focus: "testing" };
+      const session = createSession(db, {
+        agent_id: "claude-code",
+        context: ctx,
+      });
+
+      expect(session.context).toEqual({ focus: "testing" });
+    });
+
+    it("should store complex context with all fields", () => {
+      const ctx: SessionContext = {
+        focus: "deploying the new API",
+        relevant_pages: ["Skills/api-deploy", "Jobs/weekly-report"],
+        working_memory: [
+          { key: "branch", value: "feature/sessions", addedAt: "2026-03-02T00:00:00Z", source: "manual" },
+        ],
+        preferences: { verbosity: "concise", auto_approve: false },
+      };
+      const session = createSession(db, {
+        agent_id: "claude-code",
+        context: ctx,
+      });
+
+      expect(session.context).toEqual(ctx);
+    });
+
+    it("should populate created_at, updated_at, and last_active_at as ISO timestamps", () => {
+      const session = createSession(db, { agent_id: "claude-code" });
+
+      expect(session.created_at).toBeTruthy();
+      expect(session.updated_at).toBeTruthy();
+      expect(session.last_active_at).toBeTruthy();
+
+      // Verify they are valid date strings (SQLite datetime format: YYYY-MM-DD HH:MM:SS)
+      expect(new Date(session.created_at).toString()).not.toBe("Invalid Date");
+      expect(new Date(session.updated_at).toString()).not.toBe("Invalid Date");
+      expect(new Date(session.last_active_at).toString()).not.toBe("Invalid Date");
+    });
+
+    it("should generate unique IDs for each session", () => {
+      const session1 = createSession(db, { agent_id: "claude-code" });
+      const session2 = createSession(db, { agent_id: "claude-code" });
+
+      expect(session1.id).not.toBe(session2.id);
+    });
+  });
+
+  describe("getSession", () => {
+    it("should return the session with parsed context for a valid id", () => {
+      const created = createSession(db, {
+        agent_id: "claude-code",
+        name: "Test Session",
+        context: { focus: "testing" },
+      });
+
+      const retrieved = getSession(db, created.id);
+
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.id).toBe(created.id);
+      expect(retrieved!.name).toBe("Test Session");
+      expect(retrieved!.agent_id).toBe("claude-code");
+      expect(retrieved!.status).toBe("active");
+      expect(retrieved!.context).toEqual({ focus: "testing" });
+      expect(retrieved!.created_at).toBe(created.created_at);
+      expect(retrieved!.updated_at).toBe(created.updated_at);
+      expect(retrieved!.last_active_at).toBe(created.last_active_at);
+    });
+
+    it("should return null for a nonexistent id", () => {
+      const result = getSession(db, "nonexistent");
+      expect(result).toBeNull();
+    });
+
+    it("should parse empty context JSON into empty object", () => {
+      const created = createSession(db, { agent_id: "claude-code" });
+      const retrieved = getSession(db, created.id);
+
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.context).toEqual({});
+    });
+
+    it("should parse complex context JSON correctly", () => {
+      const ctx: SessionContext = {
+        focus: "deployment",
+        relevant_pages: ["Page/A", "Page/B"],
+        working_memory: [
+          { key: "k1", value: "v1", addedAt: "2026-03-02T00:00:00Z" },
+        ],
+        preferences: { verbosity: "verbose", auto_approve: true },
+      };
+      const created = createSession(db, {
+        agent_id: "claude-code",
+        context: ctx,
+      });
+
+      const retrieved = getSession(db, created.id);
+
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.context).toEqual(ctx);
     });
   });
 });
