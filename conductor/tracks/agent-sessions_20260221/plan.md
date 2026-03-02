@@ -122,7 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 1.3: Implement Session Data Access -- Create and Get
+### Task 1.3: Implement Session Data Access -- Create and Get [x] [642e85a]
 
 **TDD Cycle:**
 - RED: Write tests for `createSession(db, params)` and `getSession(db, id)`.
