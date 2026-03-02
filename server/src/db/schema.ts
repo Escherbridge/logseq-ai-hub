@@ -67,5 +67,31 @@ export function initializeSchema(db: Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_character_sessions_character ON character_sessions(character_id);
     CREATE INDEX IF NOT EXISTS idx_character_sessions_updated ON character_sessions(updated_at);
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      agent_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      context TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_active_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS session_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      tool_calls TEXT,
+      tool_call_id TEXT,
+      metadata TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_session_messages_session ON session_messages(session_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
   `);
 }
