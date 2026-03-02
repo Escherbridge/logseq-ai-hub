@@ -169,7 +169,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 1.5: Implement Message Data Access -- Add and Load
+### Task 1.5: Implement Message Data Access -- Add and Load [x] [80ccf5b]
 
 **TDD Cycle:**
 - RED: Write tests for `addSessionMessage(db, params)` and `loadSessionMessages(db, sessionId, opts)`.
