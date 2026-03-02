@@ -17,12 +17,13 @@ export interface ToolCall {
 export async function chatCompletion(
   messages: ConversationMessage[],
   tools: any[] | undefined,
-  config: Config
+  config: Config,
+  modelOverride?: string
 ): Promise<LLMResponse> {
   const endpoint = `${config.llmEndpoint}/chat/completions`;
 
   const body: Record<string, unknown> = {
-    model: config.agentModel,
+    model: modelOverride ?? config.agentModel,
     messages: messages.map(m => {
       const msg: Record<string, unknown> = { role: m.role, content: m.content };
       if (m.toolCallId) msg.tool_call_id = m.toolCallId;
