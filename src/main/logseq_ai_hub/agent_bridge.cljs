@@ -6,6 +6,7 @@
             [logseq-ai-hub.mcp.client :as mcp-client]
             [logseq-ai-hub.secrets :as secrets]
             [logseq-ai-hub.memory :as memory]
+            [logseq-ai-hub.registry.bridge :as registry-bridge]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -422,7 +423,13 @@
    "store_memory"       handle-store-memory
    "recall_memory"      handle-recall-memory
    "search_memory"      handle-search-memory
-   "list_memory_tags"   handle-list-memory-tags})
+   "list_memory_tags"   handle-list-memory-tags
+   ;; Registry operations (for MCP server)
+   "registry_list"      registry-bridge/handle-registry-list
+   "registry_get"       registry-bridge/handle-registry-get
+   "registry_search"    registry-bridge/handle-registry-search
+   "registry_refresh"   registry-bridge/handle-registry-refresh
+   "execute_skill"      registry-bridge/handle-execute-skill})
 
 ;; =============================================================================
 ;; Event Dispatcher

@@ -11,6 +11,7 @@
 (def ^:dynamic *call-mcp-tool-fn* nil)
 (def ^:dynamic *read-mcp-resource-fn* nil)
 (def ^:dynamic *run-legacy-task-fn* nil)
+(def ^:dynamic *ask-human-fn* nil)
 
 ;; Step executor registry
 (defonce step-executors (atom {}))
@@ -224,6 +225,33 @@
           resource (get config "resource")]
       (*read-mcp-resource-fn* server resource))))
 
+(defn- ask-human-executor
+  "Executor for :ask-human step type.
+   Sends a question to a human via the server's approval endpoint
+   and waits for their response."
+  [step context]
+  (if-not *ask-human-fn*
+    (js/Promise.reject
+      (errors/make-error :ask-human-not-initialized "Ask human function not initialized"))
+    (let [config (interpolate-config (:step-config step) context)
+          contact (get config "contact")
+          question (get config "question")
+          options (get config "options")
+          timeout (get config "timeout")
+          on-timeout (get config "on-timeout" "fail")]
+      (-> (*ask-human-fn* {:contact contact
+                           :question question
+                           :options options
+                           :timeout timeout})
+          (.then (fn [result]
+                   (let [status (.-status result)]
+                     (if (and (= status "timeout") (= on-timeout "continue"))
+                       {:status "timeout" :response nil :continued true}
+                       (if (= status "timeout")
+                         (throw (errors/make-error :approval-timeout "Human approval timed out"))
+                         {:status status
+                          :response (.-response result)})))))))))
+
 ;; Register all executors
 (register-executor! :graph-query graph-query-executor)
 (register-executor! :llm-call llm-call-executor)
@@ -236,3 +264,4 @@
 (register-executor! :legacy-task legacy-task-executor)
 (register-executor! :mcp-tool mcp-tool-executor)
 (register-executor! :mcp-resource mcp-resource-executor)
+(register-executor! :ask-human ask-human-executor)

@@ -1,8 +1,10 @@
 import type { Database } from "bun:sqlite";
 import type { Config } from "../../config";
+import type { ApprovalStore } from "../../services/approval-store";
 import { upsertContact } from "../../db/contacts";
 import { insertMessage } from "../../db/messages";
 import { sseManager } from "../../services/sse";
+import { checkAndResolveApproval, createSendFollowUp } from "../../services/approval-correlation";
 import {
   parseWhatsAppWebhook,
   extractContactName,
@@ -24,7 +26,8 @@ export function handleWhatsAppVerify(req: Request, config: Config): Response {
 export async function handleWhatsAppWebhook(
   req: Request,
   config: Config,
-  db: Database
+  db: Database,
+  approvalStore?: ApprovalStore
 ): Promise<Response> {
   const body = await req.json();
   const messages = parseWhatsAppWebhook(body);
@@ -67,6 +70,11 @@ export async function handleWhatsAppWebhook(
           },
         },
       });
+
+      // Check for pending approval correlation after message storage
+      if (approvalStore) {
+        await checkAndResolveApproval(approvalStore, contact.id, msg.text.body, createSendFollowUp(config));
+      }
     }
   }
 

@@ -6,6 +6,8 @@ import { AgentBridge } from "./services/agent-bridge";
 import { ConversationStore } from "./services/conversations";
 import { createMcpServer } from "./services/mcp-server";
 import { registerAllMcpHandlers } from "./services/mcp/index";
+import { ApprovalStore } from "./services/approval-store";
+import { DynamicRegistry } from "./services/mcp/dynamic-registry";
 
 const config = loadConfig();
 
@@ -22,16 +24,22 @@ agentWarnings.forEach((w) => console.warn(`  Warning: ${w}`));
 const db = getDatabase(config.databasePath);
 const agentBridge = new AgentBridge(config.agentRequestTimeout);
 const conversations = new ConversationStore();
+const approvalStore = new ApprovalStore();
 
 // Initialize MCP server and register all tools/resources/prompts
 const mcpServer = createMcpServer();
-registerAllMcpHandlers(mcpServer, () => ({
+let dynamicRegistry: DynamicRegistry;
+const getContext = () => ({
   bridge: agentBridge,
   db,
   config,
-}));
+  approvalStore,
+  dynamicRegistry,
+});
+registerAllMcpHandlers(mcpServer, getContext);
+dynamicRegistry = new DynamicRegistry(mcpServer, getContext);
 
-const router = createRouter({ config, db, agentBridge, conversations });
+const router = createRouter({ config, db, agentBridge, conversations, approvalStore });
 
 sseManager.start();
 

@@ -1,6 +1,8 @@
 import type { AgentBridge } from "../services/agent-bridge";
 import type { Database } from "bun:sqlite";
 import type { Config } from "../config";
+import type { ApprovalStore } from "../services/approval-store";
+import type { DynamicRegistry } from "../services/mcp/dynamic-registry";
 
 /**
  * Context passed to MCP tool handlers so they can interact
@@ -11,6 +13,8 @@ export interface McpToolContext {
   db: Database;
   config: Config;
   traceId?: string;
+  approvalStore?: ApprovalStore;
+  dynamicRegistry?: DynamicRegistry;
 }
 
 /**

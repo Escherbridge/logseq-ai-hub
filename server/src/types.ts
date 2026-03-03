@@ -23,7 +23,7 @@ export interface Message {
 }
 
 export interface SSEEvent {
-  type: "connected" | "new_message" | "message_sent" | "status_update" | "heartbeat" | "agent_request" | "agent_callback" | "job_created" | "job_started" | "job_completed" | "job_failed" | "job_cancelled" | "skill_created";
+  type: "connected" | "new_message" | "message_sent" | "status_update" | "heartbeat" | "agent_request" | "agent_callback" | "job_created" | "job_started" | "job_completed" | "job_failed" | "job_cancelled" | "skill_created" | "approval_created" | "approval_resolved" | "approval_timeout";
   data: Record<string, unknown>;
 }
 

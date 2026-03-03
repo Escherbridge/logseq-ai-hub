@@ -9,6 +9,7 @@
             [logseq-ai-hub.agent-bridge :as agent-bridge]
             [logseq-ai-hub.settings-writer :as settings-writer]
             [logseq-ai-hub.llm.enriched :as enriched]
+            [logseq-ai-hub.registry.init :as registry-init]
             [clojure.string :as str]))
 
 (def settings-schema
@@ -148,6 +149,7 @@
   (tasks/init!)
   (sub-agents/init!)
   (job-runner-init/init!)
+  (registry-init/init!)
   (agent-bridge/init!))
 
 (defn init []

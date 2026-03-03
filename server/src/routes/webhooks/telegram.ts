@@ -1,14 +1,17 @@
 import type { Database } from "bun:sqlite";
 import type { Config } from "../../config";
+import type { ApprovalStore } from "../../services/approval-store";
 import { upsertContact } from "../../db/contacts";
 import { insertMessage } from "../../db/messages";
 import { sseManager } from "../../services/sse";
+import { checkAndResolveApproval, createSendFollowUp } from "../../services/approval-correlation";
 import { parseTelegramUpdate } from "../../services/telegram";
 
 export async function handleTelegramWebhook(
   req: Request,
   config: Config,
-  db: Database
+  db: Database,
+  approvalStore?: ApprovalStore
 ): Promise<Response> {
   const body = await req.json();
   const update = parseTelegramUpdate(body);
@@ -57,6 +60,11 @@ export async function handleTelegramWebhook(
         },
       },
     });
+
+    // Check for pending approval correlation after message storage
+    if (approvalStore) {
+      await checkAndResolveApproval(approvalStore, contact.id, msg.text, createSendFollowUp(config));
+    }
   }
 
   return new Response("OK", { status: 200 });
