@@ -31,6 +31,7 @@ import {
   handleGetCharacterSession,
   handleDeleteCharacterSession,
 } from "./routes/api/character-sessions";
+import { handleEmitEvent, handleListEvents } from "./routes/api/hub-events";
 import { handleMcpRequest, handleMcpDelete, handleMcpConfig } from "./routes/mcp-transport";
 import { handleListApprovals, handleResolveApproval, handleCancelApproval, handleAskApproval } from "./routes/api/approvals";
 import { matchRoute } from "./router/match";
@@ -291,6 +292,16 @@ export function createRouter(ctx: RouteContext) {
       pattern: "/api/character-sessions/:id",
       handler: (req, ctx, params) =>
         handleDeleteCharacterSession(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "POST",
+      pattern: "/api/events",
+      handler: (req, ctx) => handleEmitEvent(req, ctx.config, ctx.db),
+    },
+    {
+      method: "GET",
+      pattern: "/api/events",
+      handler: (req, ctx) => handleListEvents(req, ctx.config, ctx.db),
     },
     // MCP Server Protocol (Streamable HTTP transport)
     {

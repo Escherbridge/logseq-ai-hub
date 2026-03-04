@@ -67,5 +67,19 @@ export function initializeSchema(db: Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_character_sessions_character ON character_sessions(character_id);
     CREATE INDEX IF NOT EXISTS idx_character_sessions_updated ON character_sessions(updated_at);
+
+    CREATE TABLE IF NOT EXISTS hub_events (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      character_id TEXT,
+      source TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_hub_events_type ON hub_events(event_type);
+    CREATE INDEX IF NOT EXISTS idx_hub_events_character ON hub_events(character_id);
+    CREATE INDEX IF NOT EXISTS idx_hub_events_created ON hub_events(created_at);
   `);
 }
