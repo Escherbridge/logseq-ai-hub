@@ -320,7 +320,7 @@ Pi.dev integration as opt-in configurable agent execution platform with per-trac
 
 Template skill/procedure pages, end-to-end integration testing, final wiring.
 
-### Task 6.1: Plugin — Code review skill template [ ]
+### Task 6.1: Plugin — Code review skill template [x] [c532942]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/templates.cljs`
 
@@ -329,7 +329,7 @@ Template skill/procedure pages, end-to-end integration testing, final wiring.
 - The dynamic arg parser resolves these via BFS traversal
 - Provide `create-code-review-skill!` function that creates the page in the graph
 
-### Task 6.2: Plugin — Deployment procedure template [ ]
+### Task 6.2: Plugin — Deployment procedure template [x] [c532942]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/templates.cljs` (extend)
 
@@ -338,7 +338,7 @@ Template skill/procedure pages, end-to-end integration testing, final wiring.
 - `procedure-requires-approval:: true`, `procedure-approval-contact::` properties
 - `create-deployment-procedure!` function
 
-### Task 6.3: Plugin — Slash commands for template creation [ ]
+### Task 6.3: Plugin — Slash commands for template creation [x] [c532942]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/init.cljs` (extend)
 
@@ -347,7 +347,7 @@ Template skill/procedure pages, end-to-end integration testing, final wiring.
 - Register `/code-repo:create-review-skill` slash command — creates the code review skill template
 - Register `/code-repo:create-deploy-procedure` slash command — creates the deployment procedure template
 
-### Task 6.4: Server — MCP resources for new entity types [ ]
+### Task 6.4: Server — MCP resources for new entity types [x] [d7293f3]
 
 **Files:** `server/src/services/mcp/resources.ts` (modify)
 
@@ -356,7 +356,7 @@ Template skill/procedure pages, end-to-end integration testing, final wiring.
 - Add `logseq://projects/{name}/tracks` resource template
 - Add `logseq://projects/{name}/safeguards` resource template
 
-### Task 6.5: Server — MCP prompts for code workflows [ ]
+### Task 6.5: Server — MCP prompts for code workflows [x] [bfb3dd3]
 
 **Files:** `server/src/services/mcp/prompts.ts` (modify)
 
@@ -364,7 +364,7 @@ Template skill/procedure pages, end-to-end integration testing, final wiring.
 - Add `start-coding-session` prompt template — assembles project context + recent lessons + active claims
 - Add `deployment-checklist` prompt template — assembles deployment procedure + project status
 
-### Task 6.6: End-to-end integration tests [ ]
+### Task 6.6: End-to-end integration tests [x] [c8ca171]
 
 **Files:** `server/tests/code-repo-integration.test.ts`
 
@@ -373,7 +373,7 @@ Template skill/procedure pages, end-to-end integration testing, final wiring.
 - Test project_dashboard aggregation
 - Verify all 20+ new tools are registered and callable
 
-### Task 6.7: Plugin — Integration initialization and DB watcher [ ]
+### Task 6.7: Plugin — Integration initialization and DB watcher [x] [3c25dce]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/init.cljs` (finalize), `src/main/logseq_ai_hub/core.cljs` (modify)
 
