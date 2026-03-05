@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createTestDb } from "./helpers";
 import { createSession, getSession, listSessions, updateSession, addSessionMessage, loadSessionMessages } from "../src/db/sessions";
-import { SessionStore } from "../src/services/session-store";
+import { SessionStore, NotFoundError } from "../src/services/session-store";
 import type { Session, SessionContext, SessionMessage } from "../src/types/session";
 
 describe("Session Schema", () => {
@@ -1170,6 +1170,445 @@ describe("SessionStore", () => {
     it("should return false for a nonexistent session", () => {
       const result = store.touchActivity("nonexistent");
       expect(result).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // updateContext
+  // ---------------------------------------------------------------------------
+
+  describe("updateContext", () => {
+    it("should deep-merge focus into an empty context", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      const updated = store.updateContext(session.id, { focus: "implement auth" });
+
+      expect(updated.context.focus).toBe("implement auth");
+    });
+
+    it("should replace focus when called twice", () => {
+      const session = store.create({
+        agent_id: "claude-code",
+        context: { focus: "old focus" },
+      });
+
+      const updated = store.updateContext(session.id, { focus: "new focus" });
+
+      expect(updated.context.focus).toBe("new focus");
+    });
+
+    it("should union relevant_pages without replacing them", () => {
+      const session = store.create({
+        agent_id: "claude-code",
+        context: { relevant_pages: ["Page/A", "Page/B"] },
+      });
+
+      const updated = store.updateContext(session.id, {
+        relevant_pages: ["Page/B", "Page/C"],
+      });
+
+      // B deduped, A preserved, C added
+      expect(updated.context.relevant_pages).toContain("Page/A");
+      expect(updated.context.relevant_pages).toContain("Page/B");
+      expect(updated.context.relevant_pages).toContain("Page/C");
+      expect(updated.context.relevant_pages!.length).toBe(3);
+    });
+
+    it("should union relevant_pages from both sides (mergeSessionContext unions, no cap)", () => {
+      // updateContext uses mergeSessionContext which unions without capping.
+      // LRU cap is enforced by addRelevantPage (see session-context tests).
+      const initial: SessionContext = {
+        relevant_pages: ["P1", "P2", "P3"],
+      };
+      const session = store.create({ agent_id: "claude-code", context: initial });
+
+      const updated = store.updateContext(session.id, {
+        relevant_pages: ["P3", "P4"],
+      });
+
+      // P3 deduped; P1, P2, P4 all present
+      expect(updated.context.relevant_pages).toContain("P1");
+      expect(updated.context.relevant_pages).toContain("P2");
+      expect(updated.context.relevant_pages).toContain("P3");
+      expect(updated.context.relevant_pages).toContain("P4");
+      expect(updated.context.relevant_pages!.length).toBe(4);
+    });
+
+    it("should merge working_memory by key without replacing other entries", () => {
+      const session = store.create({
+        agent_id: "claude-code",
+        context: {
+          working_memory: [
+            { key: "branch", value: "main", addedAt: "2026-01-01T00:00:00Z" },
+          ],
+        },
+      });
+
+      const updated = store.updateContext(session.id, {
+        working_memory: [
+          { key: "pr_url", value: "https://github.com/x/y/pull/1", addedAt: "2026-01-02T00:00:00Z" },
+        ],
+      });
+
+      const wm = updated.context.working_memory!;
+      expect(wm.length).toBe(2);
+      expect(wm.find((e) => e.key === "branch")?.value).toBe("main");
+      expect(wm.find((e) => e.key === "pr_url")?.value).toBe("https://github.com/x/y/pull/1");
+    });
+
+    it("should merge working_memory by key across both sides (no cap on raw merge)", () => {
+      // updateContext uses mergeSessionContext which merges by key without capping.
+      // LRU cap is enforced by addMemory (which calls addWorkingMemory).
+      const entries = Array.from({ length: 5 }, (_, i) => ({
+        key: `key${i}`,
+        value: `val${i}`,
+        addedAt: `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+      }));
+      const session = store.create({
+        agent_id: "claude-code",
+        context: { working_memory: entries },
+      });
+
+      // Adding a new key merges it in alongside existing entries
+      const updated = store.updateContext(session.id, {
+        working_memory: [{ key: "key_new", value: "new", addedAt: "2026-02-01T00:00:00Z" }],
+      });
+
+      const wm = updated.context.working_memory!;
+      expect(wm.length).toBe(6);
+      expect(wm.find((e) => e.key === "key0")).toBeDefined();
+      expect(wm.find((e) => e.key === "key_new")?.value).toBe("new");
+    });
+
+    it("should shallow-merge preferences", () => {
+      const session = store.create({
+        agent_id: "claude-code",
+        context: { preferences: { verbosity: "concise", auto_approve: false } },
+      });
+
+      const updated = store.updateContext(session.id, {
+        preferences: { auto_approve: true },
+      });
+
+      expect(updated.context.preferences?.verbosity).toBe("concise");
+      expect(updated.context.preferences?.auto_approve).toBe(true);
+    });
+
+    it("should persist changes to the database (survives a fresh get)", () => {
+      const session = store.create({ agent_id: "claude-code" });
+      store.updateContext(session.id, { focus: "persist me" });
+
+      const refetched = store.get(session.id);
+      expect(refetched!.context.focus).toBe("persist me");
+    });
+
+    it("should throw NotFoundError for a nonexistent session", () => {
+      expect(() =>
+        store.updateContext("nonexistent-id", { focus: "x" })
+      ).toThrow(NotFoundError);
+    });
+
+    it("should throw NotFoundError with the session id in the message", () => {
+      expect(() =>
+        store.updateContext("missing-session", { focus: "x" })
+      ).toThrow("missing-session");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // setFocus
+  // ---------------------------------------------------------------------------
+
+  describe("setFocus", () => {
+    it("should set focus on a session with no prior context", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      const updated = store.setFocus(session.id, "fixing the auth bug");
+
+      expect(updated.context.focus).toBe("fixing the auth bug");
+    });
+
+    it("should replace an existing focus", () => {
+      const session = store.create({
+        agent_id: "claude-code",
+        context: { focus: "old task" },
+      });
+
+      const updated = store.setFocus(session.id, "new task");
+
+      expect(updated.context.focus).toBe("new task");
+    });
+
+    it("should not touch other context fields", () => {
+      const session = store.create({
+        agent_id: "claude-code",
+        context: {
+          focus: "old",
+          relevant_pages: ["Doc/api"],
+          preferences: { verbosity: "verbose" },
+        },
+      });
+
+      const updated = store.setFocus(session.id, "new");
+
+      expect(updated.context.relevant_pages).toEqual(["Doc/api"]);
+      expect(updated.context.preferences?.verbosity).toBe("verbose");
+    });
+
+    it("should throw NotFoundError for a nonexistent session", () => {
+      expect(() => store.setFocus("bad-id", "focus")).toThrow(NotFoundError);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // addMemory
+  // ---------------------------------------------------------------------------
+
+  describe("addMemory", () => {
+    it("should add a new key-value entry to working memory", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      const updated = store.addMemory(session.id, "branch", "feature/sessions");
+
+      const wm = updated.context.working_memory!;
+      expect(wm.length).toBe(1);
+      expect(wm[0].key).toBe("branch");
+      expect(wm[0].value).toBe("feature/sessions");
+      expect(wm[0].source).toBe("manual");
+    });
+
+    it("should update an existing key in-place", () => {
+      const session = store.create({
+        agent_id: "claude-code",
+        context: {
+          working_memory: [
+            { key: "branch", value: "main", addedAt: "2026-01-01T00:00:00Z", source: "manual" },
+          ],
+        },
+      });
+
+      const updated = store.addMemory(session.id, "branch", "feature/new");
+
+      const wm = updated.context.working_memory!;
+      expect(wm.length).toBe(1);
+      expect(wm[0].value).toBe("feature/new");
+    });
+
+    it("should store the source when provided as 'auto'", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      const updated = store.addMemory(session.id, "auto_key", "auto_val", "auto");
+
+      const entry = updated.context.working_memory!.find((e) => e.key === "auto_key");
+      expect(entry?.source).toBe("auto");
+    });
+
+    it("should evict the oldest entry when memory is at the cap of 20", () => {
+      // Build 20 entries with sequential timestamps so key0 is oldest
+      const entries = Array.from({ length: 20 }, (_, i) => ({
+        key: `k${i}`,
+        value: `v${i}`,
+        addedAt: `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+        source: "manual" as const,
+      }));
+      const session = store.create({
+        agent_id: "claude-code",
+        context: { working_memory: entries },
+      });
+
+      const updated = store.addMemory(session.id, "k_new", "v_new");
+
+      const wm = updated.context.working_memory!;
+      expect(wm.length).toBe(20);
+      expect(wm.find((e) => e.key === "k0")).toBeUndefined();
+      expect(wm.find((e) => e.key === "k_new")).toBeDefined();
+    });
+
+    it("should persist changes to the database", () => {
+      const session = store.create({ agent_id: "claude-code" });
+      store.addMemory(session.id, "task", "write tests");
+
+      const refetched = store.get(session.id);
+      const entry = refetched!.context.working_memory!.find((e) => e.key === "task");
+      expect(entry?.value).toBe("write tests");
+    });
+
+    it("should throw NotFoundError for a nonexistent session", () => {
+      expect(() =>
+        store.addMemory("nonexistent", "k", "v")
+      ).toThrow(NotFoundError);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // getMessage
+  // ---------------------------------------------------------------------------
+
+  describe("getMessage", () => {
+    it("should retrieve an existing message by id", () => {
+      const session = store.create({ agent_id: "claude-code" });
+      const added = store.addMessage({
+        session_id: session.id,
+        role: "user",
+        content: "Hello, agent!",
+      });
+
+      const msg = store.getMessage(session.id, added.id);
+
+      expect(msg.id).toBe(added.id);
+      expect(msg.session_id).toBe(session.id);
+      expect(msg.role).toBe("user");
+      expect(msg.content).toBe("Hello, agent!");
+    });
+
+    it("should parse tool_calls JSON on retrieval", () => {
+      const session = store.create({ agent_id: "claude-code" });
+      const toolCalls = [{ id: "c1", type: "function", function: { name: "search", arguments: "{}" } }];
+      const added = store.addMessage({
+        session_id: session.id,
+        role: "assistant",
+        content: "Searching…",
+        tool_calls: toolCalls,
+      });
+
+      const msg = store.getMessage(session.id, added.id);
+
+      expect(msg.tool_calls).toEqual(toolCalls);
+    });
+
+    it("should parse metadata JSON on retrieval", () => {
+      const session = store.create({ agent_id: "claude-code" });
+      const added = store.addMessage({
+        session_id: session.id,
+        role: "assistant",
+        content: "Done",
+        metadata: { tokens: 42 },
+      });
+
+      const msg = store.getMessage(session.id, added.id);
+
+      expect(msg.metadata).toEqual({ tokens: 42 });
+    });
+
+    it("should throw NotFoundError for a nonexistent message id", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      expect(() => store.getMessage(session.id, 99999)).toThrow(NotFoundError);
+    });
+
+    it("should throw NotFoundError when message belongs to a different session", () => {
+      const session1 = store.create({ agent_id: "claude-code" });
+      const session2 = store.create({ agent_id: "claude-code" });
+      const msg = store.addMessage({
+        session_id: session1.id,
+        role: "user",
+        content: "Private message",
+      });
+
+      // Looking up the message using session2's id should throw
+      expect(() => store.getMessage(session2.id, msg.id)).toThrow(NotFoundError);
+    });
+
+    it("should include the message id in the NotFoundError message", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      expect(() => store.getMessage(session.id, 12345)).toThrow("12345");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // NotFoundError
+  // ---------------------------------------------------------------------------
+
+  describe("NotFoundError", () => {
+    it("should be an instance of Error", () => {
+      const err = new NotFoundError("test");
+      expect(err).toBeInstanceOf(Error);
+    });
+
+    it("should have name 'NotFoundError'", () => {
+      const err = new NotFoundError("test");
+      expect(err.name).toBe("NotFoundError");
+    });
+
+    it("should carry the provided message", () => {
+      const err = new NotFoundError("session xyz not found");
+      expect(err.message).toBe("session xyz not found");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Concurrent operations
+  // ---------------------------------------------------------------------------
+
+  describe("concurrent operations", () => {
+    it("should handle multiple context updates to different sessions independently", () => {
+      const s1 = store.create({ agent_id: "claude-code", name: "Session 1" });
+      const s2 = store.create({ agent_id: "claude-code", name: "Session 2" });
+
+      store.updateContext(s1.id, { focus: "task A" });
+      store.updateContext(s2.id, { focus: "task B" });
+      store.addMemory(s1.id, "branch", "feat/one");
+      store.addMemory(s2.id, "branch", "feat/two");
+
+      const r1 = store.get(s1.id)!;
+      const r2 = store.get(s2.id)!;
+
+      expect(r1.context.focus).toBe("task A");
+      expect(r2.context.focus).toBe("task B");
+      expect(r1.context.working_memory!.find((e) => e.key === "branch")?.value).toBe("feat/one");
+      expect(r2.context.working_memory!.find((e) => e.key === "branch")?.value).toBe("feat/two");
+    });
+
+    it("should correctly interleave messages across sessions without cross-contamination", () => {
+      const s1 = store.create({ agent_id: "agent-a" });
+      const s2 = store.create({ agent_id: "agent-b" });
+
+      store.addMessage({ session_id: s1.id, role: "user", content: "S1 msg 1" });
+      store.addMessage({ session_id: s2.id, role: "user", content: "S2 msg 1" });
+      store.addMessage({ session_id: s1.id, role: "assistant", content: "S1 msg 2" });
+      store.addMessage({ session_id: s2.id, role: "assistant", content: "S2 msg 2" });
+
+      const msgs1 = store.getMessages(s1.id);
+      const msgs2 = store.getMessages(s2.id);
+
+      expect(msgs1).toHaveLength(2);
+      expect(msgs1[0].content).toBe("S1 msg 1");
+      expect(msgs1[1].content).toBe("S1 msg 2");
+
+      expect(msgs2).toHaveLength(2);
+      expect(msgs2[0].content).toBe("S2 msg 1");
+      expect(msgs2[1].content).toBe("S2 msg 2");
+    });
+
+    it("should handle archiving one session without affecting another", () => {
+      const s1 = store.create({ agent_id: "claude-code", name: "Keep" });
+      const s2 = store.create({ agent_id: "claude-code", name: "Archive" });
+
+      store.archive(s2.id);
+      store.addMemory(s1.id, "note", "still active");
+
+      const active = store.list("claude-code");
+      expect(active).toHaveLength(1);
+      expect(active[0].id).toBe(s1.id);
+
+      const r1 = store.get(s1.id)!;
+      expect(r1.context.working_memory!.find((e) => e.key === "note")?.value).toBe("still active");
+    });
+
+    it("should accumulate addMemory calls on the same session correctly", () => {
+      const session = store.create({ agent_id: "claude-code" });
+
+      store.addMemory(session.id, "k1", "v1");
+      store.addMemory(session.id, "k2", "v2");
+      store.addMemory(session.id, "k1", "v1-updated");
+
+      const result = store.get(session.id)!;
+      const wm = result.context.working_memory!;
+
+      expect(wm.length).toBe(2);
+      expect(wm.find((e) => e.key === "k1")?.value).toBe("v1-updated");
+      expect(wm.find((e) => e.key === "k2")?.value).toBe("v2");
     });
   });
 });

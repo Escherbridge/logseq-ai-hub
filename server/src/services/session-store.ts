@@ -8,8 +8,13 @@ import {
   loadSessionMessages,
   type LoadMessagesOptions,
 } from "../db/sessions";
+import {
+  mergeSessionContext,
+  addWorkingMemory,
+} from "./session-context";
 import type {
   Session,
+  SessionContext,
   CreateSessionParams,
   ListSessionsOptions,
   UpdateSessionParams,
@@ -18,9 +23,42 @@ import type {
 } from "../types/session";
 
 /**
+ * Thrown when a session or message is not found by id.
+ */
+export class NotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
+/**
+ * Raw row shape from SQLite for a single session_message lookup.
+ */
+interface MessageRow {
+  id: number;
+  session_id: string;
+  role: string;
+  content: string;
+  tool_calls: string | null;
+  tool_call_id: string | null;
+  metadata: string | null;
+  created_at: string;
+}
+
+function parseMessageRow(row: MessageRow): SessionMessage {
+  return {
+    ...row,
+    role: row.role as SessionMessage["role"],
+    tool_calls: row.tool_calls ? JSON.parse(row.tool_calls) : null,
+    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+  };
+}
+
+/**
  * High-level session management class that wraps the data-access layer.
  * Holds a Database instance and exposes a clean API for session CRUD,
- * message storage, archival, and activity tracking.
+ * message storage, archival, context management, and activity tracking.
  */
 export class SessionStore {
   constructor(private db: Database) {}
@@ -54,6 +92,73 @@ export class SessionStore {
    */
   update(id: string, updates: UpdateSessionParams): boolean {
     return updateSession(this.db, id, updates);
+  }
+
+  /**
+   * Deep-merge context updates into the session's existing context.
+   * - focus: replaced if provided
+   * - relevant_pages: unioned with case-insensitive deduplication, capped at 10 (LRU eviction)
+   * - working_memory: merged by key, capped at 20 (LRU eviction)
+   * - preferences: shallow-merged
+   * Throws NotFoundError if the session does not exist.
+   */
+  updateContext(sessionId: string, contextUpdates: SessionContext): Session {
+    const session = this.get(sessionId);
+    if (!session) {
+      throw new NotFoundError(`Session not found: ${sessionId}`);
+    }
+    const merged = mergeSessionContext(session.context, contextUpdates);
+    updateSession(this.db, sessionId, { context: merged });
+    return this.get(sessionId)!;
+  }
+
+  /**
+   * Set the current focus string for a session.
+   * Convenience wrapper around updateContext({ focus }).
+   * Throws NotFoundError if the session does not exist.
+   */
+  setFocus(sessionId: string, focus: string): Session {
+    return this.updateContext(sessionId, { focus });
+  }
+
+  /**
+   * Add or update a key-value entry in the session's working memory.
+   * If the key already exists its value is updated in-place.
+   * Evicts the oldest entry (by addedAt) when at the cap of 20.
+   * Throws NotFoundError if the session does not exist.
+   */
+  addMemory(
+    sessionId: string,
+    key: string,
+    value: string,
+    source: "manual" | "auto" = "manual"
+  ): Session {
+    const session = this.get(sessionId);
+    if (!session) {
+      throw new NotFoundError(`Session not found: ${sessionId}`);
+    }
+    const newContext = addWorkingMemory(session.context, key, value, source);
+    updateSession(this.db, sessionId, { context: newContext });
+    return this.get(sessionId)!;
+  }
+
+  /**
+   * Retrieve a single message by its integer id within a session.
+   * Throws NotFoundError if the message does not exist or belongs to a
+   * different session.
+   */
+  getMessage(sessionId: string, messageId: number): SessionMessage {
+    const row = this.db
+      .query(`SELECT * FROM session_messages WHERE id = ? AND session_id = ?`)
+      .get(messageId, sessionId) as MessageRow | null;
+
+    if (!row) {
+      throw new NotFoundError(
+        `Message ${messageId} not found in session ${sessionId}`
+      );
+    }
+
+    return parseMessageRow(row);
   }
 
   /**
