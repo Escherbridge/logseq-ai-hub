@@ -7,7 +7,9 @@ import {
   addRelevantPage,
   removeRelevantPage,
   buildSessionSystemPrompt,
+  resolveRelevantPages,
 } from "../src/services/session-context";
+import type { AgentBridge } from "../src/services/agent-bridge";
 
 describe("mergeSessionContext", () => {
   it("should replace focus when provided", () => {
@@ -426,5 +428,76 @@ describe("buildSessionSystemPrompt", () => {
     expect(focusIdx).toBeGreaterThan(-1);
     expect(memoryIdx).toBeGreaterThan(focusIdx);
     expect(pagesIdx).toBeGreaterThan(memoryIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveRelevantPages
+// ---------------------------------------------------------------------------
+
+function makeMockBridge(
+  responses: Record<string, unknown>,
+  connected = true
+): AgentBridge {
+  return {
+    isPluginConnected: () => connected,
+    sendRequest: async (operation: string, params: Record<string, unknown>) => {
+      const pageName = params.name as string;
+      if (responses[pageName] !== undefined) {
+        return responses[pageName];
+      }
+      throw new Error(`Page not found: ${pageName}`);
+    },
+  } as unknown as AgentBridge;
+}
+
+describe("resolveRelevantPages", () => {
+  it("should resolve a single page name to its content", async () => {
+    const bridge = makeMockBridge({ "Skills/api": "API skill content" });
+    const result = await resolveRelevantPages(bridge, ["Skills/api"]);
+    expect(result.get("Skills/api")).toBe("API skill content");
+  });
+
+  it("should resolve multiple pages in parallel", async () => {
+    const bridge = makeMockBridge({
+      "Page1": "Content 1",
+      "Page2": "Content 2",
+      "Page3": "Content 3",
+    });
+    const result = await resolveRelevantPages(bridge, ["Page1", "Page2", "Page3"]);
+    expect(result.size).toBe(3);
+    expect(result.get("Page1")).toBe("Content 1");
+    expect(result.get("Page2")).toBe("Content 2");
+    expect(result.get("Page3")).toBe("Content 3");
+  });
+
+  it("should skip pages that fail to load", async () => {
+    const bridge = makeMockBridge({ "Page1": "Content 1" });
+    // Page2 is not in responses, so sendRequest will throw
+    const result = await resolveRelevantPages(bridge, ["Page1", "Page2"]);
+    expect(result.size).toBe(1);
+    expect(result.get("Page1")).toBe("Content 1");
+    expect(result.has("Page2")).toBe(false);
+  });
+
+  it("should return empty map if bridge is not connected", async () => {
+    const bridge = makeMockBridge({}, false);
+    const result = await resolveRelevantPages(bridge, ["Page1"]);
+    expect(result.size).toBe(0);
+  });
+
+  it("should return empty map for empty page list", async () => {
+    const bridge = makeMockBridge({});
+    const result = await resolveRelevantPages(bridge, []);
+    expect(result.size).toBe(0);
+  });
+
+  it("should convert non-string results to string", async () => {
+    const bridge = makeMockBridge({
+      "Page1": { blocks: [{ content: "block 1" }] },
+    });
+    const result = await resolveRelevantPages(bridge, ["Page1"]);
+    expect(result.size).toBe(1);
+    expect(typeof result.get("Page1")).toBe("string");
   });
 });

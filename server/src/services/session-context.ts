@@ -4,6 +4,7 @@ import type {
   WorkingMemoryEntry,
 } from "../types/session";
 import { buildSystemPrompt } from "./agent";
+import type { AgentBridge } from "./agent-bridge";
 
 /**
  * Deep-merge two SessionContext objects.
@@ -244,4 +245,52 @@ export function buildSessionSystemPrompt(
   }
 
   return parts.join("");
+}
+
+// ---------------------------------------------------------------------------
+// Page Content Resolution
+// ---------------------------------------------------------------------------
+
+const PAGE_RESOLVE_TIMEOUT = 2000;
+
+/**
+ * Resolve relevant page names to their content via the Agent Bridge.
+ * Fetches pages in parallel using Promise.allSettled.
+ * Failed pages are silently skipped. Returns empty map if bridge is disconnected.
+ */
+export async function resolveRelevantPages(
+  bridge: AgentBridge,
+  pageNames: string[]
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (pageNames.length === 0 || !bridge.isPluginConnected()) {
+    return result;
+  }
+
+  const fetchPage = (name: string): Promise<{ name: string; content: string }> => {
+    return new Promise(async (resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`Timeout resolving page: ${name}`)),
+        PAGE_RESOLVE_TIMEOUT
+      );
+      try {
+        const data = await bridge.sendRequest("page_read", { name });
+        clearTimeout(timer);
+        const content = typeof data === "string" ? data : JSON.stringify(data);
+        resolve({ name, content });
+      } catch (err) {
+        clearTimeout(timer);
+        reject(err);
+      }
+    });
+  };
+
+  const settled = await Promise.allSettled(pageNames.map(fetchPage));
+  for (const outcome of settled) {
+    if (outcome.status === "fulfilled") {
+      result.set(outcome.value.name, outcome.value.content);
+    }
+  }
+
+  return result;
 }
