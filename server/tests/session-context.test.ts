@@ -4,6 +4,8 @@ import {
   mergeSessionContext,
   addWorkingMemory,
   removeWorkingMemory,
+  addRelevantPage,
+  removeRelevantPage,
 } from "../src/services/session-context";
 
 describe("mergeSessionContext", () => {
@@ -236,5 +238,73 @@ describe("removeWorkingMemory", () => {
     const result = removeWorkingMemory(ctx, "a");
     expect(ctx.working_memory).toHaveLength(1);
     expect(result.working_memory).toHaveLength(0);
+  });
+});
+
+describe("addRelevantPage", () => {
+  it("should add a page to empty context", () => {
+    const ctx: SessionContext = {};
+    const result = addRelevantPage(ctx, "Skills/api-deploy");
+    expect(result.relevant_pages).toEqual(["Skills/api-deploy"]);
+  });
+
+  it("should not add a duplicate (case-insensitive) but move it to end (MRU)", () => {
+    const ctx: SessionContext = { relevant_pages: ["PageA", "PageB"] };
+    const result = addRelevantPage(ctx, "pagea");
+    // PageA should be moved to end with the new casing
+    expect(result.relevant_pages).toHaveLength(2);
+    expect(result.relevant_pages![0]).toBe("PageB");
+    expect(result.relevant_pages![1]).toBe("pagea");
+  });
+
+  it("should evict the oldest (first) when at cap of 10", () => {
+    const pages = Array.from({ length: 10 }, (_, i) => `Page${i}`);
+    const ctx: SessionContext = { relevant_pages: pages };
+    const result = addRelevantPage(ctx, "NewPage");
+    expect(result.relevant_pages).toHaveLength(10);
+    // Page0 (first/oldest) should be evicted
+    expect(result.relevant_pages).not.toContain("Page0");
+    // NewPage should be at the end
+    expect(result.relevant_pages![result.relevant_pages!.length - 1]).toBe("NewPage");
+  });
+
+  it("should store page names as-provided (not lowercased)", () => {
+    const ctx: SessionContext = {};
+    const result = addRelevantPage(ctx, "My Custom Page");
+    expect(result.relevant_pages![0]).toBe("My Custom Page");
+  });
+
+  it("should not mutate the original context", () => {
+    const ctx: SessionContext = { relevant_pages: ["A"] };
+    const result = addRelevantPage(ctx, "B");
+    expect(ctx.relevant_pages).toHaveLength(1);
+    expect(result.relevant_pages).toHaveLength(2);
+  });
+});
+
+describe("removeRelevantPage", () => {
+  it("should remove a page by name (case-insensitive)", () => {
+    const ctx: SessionContext = { relevant_pages: ["Skills/api-deploy", "Notes"] };
+    const result = removeRelevantPage(ctx, "skills/api-deploy");
+    expect(result.relevant_pages).toEqual(["Notes"]);
+  });
+
+  it("should return context unchanged if page not found", () => {
+    const ctx: SessionContext = { relevant_pages: ["A"] };
+    const result = removeRelevantPage(ctx, "nonexistent");
+    expect(result.relevant_pages).toEqual(["A"]);
+  });
+
+  it("should handle empty relevant_pages", () => {
+    const ctx: SessionContext = {};
+    const result = removeRelevantPage(ctx, "any");
+    expect(result.relevant_pages).toBeUndefined();
+  });
+
+  it("should not mutate the original context", () => {
+    const ctx: SessionContext = { relevant_pages: ["A", "B"] };
+    const result = removeRelevantPage(ctx, "A");
+    expect(ctx.relevant_pages).toHaveLength(2);
+    expect(result.relevant_pages).toHaveLength(1);
   });
 });

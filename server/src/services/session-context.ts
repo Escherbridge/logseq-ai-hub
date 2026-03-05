@@ -116,3 +116,55 @@ export function removeWorkingMemory(
   const filtered = ctx.working_memory.filter((e) => e.key !== key);
   return { ...ctx, working_memory: filtered };
 }
+
+// ---------------------------------------------------------------------------
+// Relevant Pages Helpers
+// ---------------------------------------------------------------------------
+
+const RELEVANT_PAGES_CAP = 10;
+
+/**
+ * Add a page to the session's relevant_pages list.
+ * Case-insensitive deduplication: if the page already exists (case-insensitive),
+ * it is moved to the end (MRU) with the new casing.
+ * Evicts the oldest (first in array) when at the cap of 10.
+ * Returns a new SessionContext (does not mutate the original).
+ */
+export function addRelevantPage(
+  ctx: SessionContext,
+  pageName: string
+): SessionContext {
+  const pages = [...(ctx.relevant_pages ?? [])];
+  const lowerName = pageName.toLowerCase();
+
+  // Remove existing entry (case-insensitive) so we can re-add at end
+  const existingIdx = pages.findIndex((p) => p.toLowerCase() === lowerName);
+  if (existingIdx !== -1) {
+    pages.splice(existingIdx, 1);
+  }
+
+  // Evict oldest (first) if at cap
+  if (pages.length >= RELEVANT_PAGES_CAP) {
+    pages.shift();
+  }
+
+  pages.push(pageName);
+  return { ...ctx, relevant_pages: pages };
+}
+
+/**
+ * Remove a page from the session's relevant_pages list (case-insensitive).
+ * Returns the context unchanged if the page is not found.
+ * Returns a new SessionContext (does not mutate the original).
+ */
+export function removeRelevantPage(
+  ctx: SessionContext,
+  pageName: string
+): SessionContext {
+  if (!ctx.relevant_pages) return ctx;
+  const lowerName = pageName.toLowerCase();
+  const filtered = ctx.relevant_pages.filter(
+    (p) => p.toLowerCase() !== lowerName
+  );
+  return { ...ctx, relevant_pages: filtered };
+}
