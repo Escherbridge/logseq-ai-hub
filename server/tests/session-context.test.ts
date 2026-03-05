@@ -1,11 +1,12 @@
 import { describe, it, expect } from "bun:test";
-import type { SessionContext, WorkingMemoryEntry } from "../src/types/session";
+import type { Session, SessionContext, WorkingMemoryEntry } from "../src/types/session";
 import {
   mergeSessionContext,
   addWorkingMemory,
   removeWorkingMemory,
   addRelevantPage,
   removeRelevantPage,
+  buildSessionSystemPrompt,
 } from "../src/services/session-context";
 
 describe("mergeSessionContext", () => {
@@ -306,5 +307,124 @@ describe("removeRelevantPage", () => {
     const result = removeRelevantPage(ctx, "A");
     expect(ctx.relevant_pages).toHaveLength(2);
     expect(result.relevant_pages).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSessionSystemPrompt
+// ---------------------------------------------------------------------------
+
+function makeSession(ctx: SessionContext = {}): Session {
+  return {
+    id: "test-session-id",
+    name: "Test Session",
+    agent_id: "claude-code",
+    status: "active",
+    context: ctx,
+    created_at: "2025-01-01T00:00:00Z",
+    updated_at: "2025-01-01T00:00:00Z",
+    last_active_at: "2025-01-01T00:00:00Z",
+  };
+}
+
+describe("buildSessionSystemPrompt", () => {
+  it("should produce the base system prompt when session has no context", () => {
+    const session = makeSession({});
+    const prompt = buildSessionSystemPrompt(session);
+    // Should contain the base agent prompt (from agent.ts)
+    expect(prompt).toContain("Logseq AI Hub");
+    // Should NOT contain session-specific sections
+    expect(prompt).not.toContain("Current Focus");
+    expect(prompt).not.toContain("Working Memory");
+    expect(prompt).not.toContain("Relevant Pages");
+  });
+
+  it("should include a Current Focus section when focus is set", () => {
+    const session = makeSession({ focus: "deploying API" });
+    const prompt = buildSessionSystemPrompt(session);
+    expect(prompt).toContain("Current Focus");
+    expect(prompt).toContain("deploying API");
+  });
+
+  it("should include a Working Memory section with key-value pairs", () => {
+    const session = makeSession({
+      working_memory: [
+        { key: "branch", value: "feature/auth", addedAt: "2025-01-01T00:00:00Z" },
+        { key: "env", value: "staging", addedAt: "2025-01-01T00:00:00Z" },
+      ],
+    });
+    const prompt = buildSessionSystemPrompt(session);
+    expect(prompt).toContain("Working Memory");
+    expect(prompt).toContain("branch");
+    expect(prompt).toContain("feature/auth");
+    expect(prompt).toContain("env");
+    expect(prompt).toContain("staging");
+  });
+
+  it("should include Relevant Pages section with page content when provided", () => {
+    const session = makeSession({
+      relevant_pages: ["Skills/api-deploy", "Notes/design"],
+    });
+    const pageContents = new Map([
+      ["Skills/api-deploy", "Deploy skill content here..."],
+      ["Notes/design", "Design notes content..."],
+    ]);
+    const prompt = buildSessionSystemPrompt(session, pageContents);
+    expect(prompt).toContain("Relevant Pages");
+    expect(prompt).toContain("Skills/api-deploy");
+    expect(prompt).toContain("Deploy skill content here...");
+    expect(prompt).toContain("Notes/design");
+    expect(prompt).toContain("Design notes content...");
+  });
+
+  it("should truncate long page content", () => {
+    const session = makeSession({
+      relevant_pages: ["LongPage"],
+    });
+    const longContent = "x".repeat(5000);
+    const pageContents = new Map([["LongPage", longContent]]);
+    const prompt = buildSessionSystemPrompt(session, pageContents);
+    // Should be present but truncated (max 4000 chars per page)
+    expect(prompt).toContain("LongPage");
+    // The full 5000-char content should NOT appear (truncated to 4000)
+    expect(prompt).not.toContain(longContent);
+    expect(prompt).toContain("(truncated)");
+  });
+
+  it("should handle relevant pages without page content (pages not resolved)", () => {
+    const session = makeSession({
+      relevant_pages: ["Skills/api-deploy"],
+    });
+    // No pageContents provided
+    const prompt = buildSessionSystemPrompt(session);
+    // Should list pages but without content
+    expect(prompt).toContain("Relevant Pages");
+    expect(prompt).toContain("Skills/api-deploy");
+  });
+
+  it("should include session name in prompt when available", () => {
+    const session = makeSession({ focus: "test" });
+    session.name = "API Refactor Session";
+    const prompt = buildSessionSystemPrompt(session);
+    expect(prompt).toContain("API Refactor Session");
+  });
+
+  it("should be well-structured with all sections present", () => {
+    const session = makeSession({
+      focus: "testing",
+      working_memory: [
+        { key: "branch", value: "main", addedAt: "2025-01-01T00:00:00Z" },
+      ],
+      relevant_pages: ["DesignDoc"],
+    });
+    const pageContents = new Map([["DesignDoc", "Design document content"]]);
+    const prompt = buildSessionSystemPrompt(session, pageContents);
+    // All sections should be present and in order
+    const focusIdx = prompt.indexOf("Current Focus");
+    const memoryIdx = prompt.indexOf("Working Memory");
+    const pagesIdx = prompt.indexOf("Relevant Pages");
+    expect(focusIdx).toBeGreaterThan(-1);
+    expect(memoryIdx).toBeGreaterThan(focusIdx);
+    expect(pagesIdx).toBeGreaterThan(memoryIdx);
   });
 });

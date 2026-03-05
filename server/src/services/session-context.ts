@@ -1,7 +1,9 @@
 import type {
+  Session,
   SessionContext,
   WorkingMemoryEntry,
 } from "../types/session";
+import { buildSystemPrompt } from "./agent";
 
 /**
  * Deep-merge two SessionContext objects.
@@ -167,4 +169,79 @@ export function removeRelevantPage(
     (p) => p.toLowerCase() !== lowerName
   );
   return { ...ctx, relevant_pages: filtered };
+}
+
+// ---------------------------------------------------------------------------
+// Session System Prompt Builder
+// ---------------------------------------------------------------------------
+
+const MAX_PAGE_CONTENT_LENGTH = 4000;
+const MAX_TOTAL_PAGE_CONTENT = 12000;
+
+/**
+ * Build an enriched system prompt for a session.
+ * Starts with the base agent system prompt, then appends session context
+ * sections: session info, current focus, working memory, and relevant pages.
+ * Page content is truncated to stay within token budgets.
+ */
+export function buildSessionSystemPrompt(
+  session: Session,
+  pageContents?: Map<string, string>
+): string {
+  const parts: string[] = [buildSystemPrompt()];
+  const ctx = session.context;
+  const hasContext =
+    ctx.focus ||
+    (ctx.working_memory && ctx.working_memory.length > 0) ||
+    (ctx.relevant_pages && ctx.relevant_pages.length > 0);
+
+  if (!hasContext && !session.name) return parts[0];
+
+  parts.push("\n\n---\n\n## Session Context");
+
+  if (session.name) {
+    parts.push(`\n**Session:** ${session.name}`);
+  }
+
+  // Current Focus
+  if (ctx.focus) {
+    parts.push(`\n### Current Focus\n${ctx.focus}`);
+  }
+
+  // Working Memory
+  if (ctx.working_memory && ctx.working_memory.length > 0) {
+    const entries = ctx.working_memory
+      .map((e) => `- **${e.key}**: ${e.value}`)
+      .join("\n");
+    parts.push(`\n### Working Memory\n${entries}`);
+  }
+
+  // Relevant Pages
+  if (ctx.relevant_pages && ctx.relevant_pages.length > 0) {
+    let pagesSection = "\n### Relevant Pages";
+    let totalContent = 0;
+
+    for (const pageName of ctx.relevant_pages) {
+      const content = pageContents?.get(pageName);
+      if (content && totalContent < MAX_TOTAL_PAGE_CONTENT) {
+        const truncated =
+          content.length > MAX_PAGE_CONTENT_LENGTH
+            ? content.slice(0, MAX_PAGE_CONTENT_LENGTH) + "\n... (truncated)"
+            : content;
+        const remaining = MAX_TOTAL_PAGE_CONTENT - totalContent;
+        const finalContent =
+          truncated.length > remaining
+            ? truncated.slice(0, remaining) + "\n... (truncated)"
+            : truncated;
+        pagesSection += `\n\n#### ${pageName}\n${finalContent}`;
+        totalContent += finalContent.length;
+      } else {
+        pagesSection += `\n- ${pageName}`;
+      }
+    }
+
+    parts.push(pagesSection);
+  }
+
+  return parts.join("");
 }
