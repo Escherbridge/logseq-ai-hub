@@ -35,6 +35,7 @@ const getContext = () => ({
   config,
   approvalStore,
   dynamicRegistry,
+  sessionStore,
 });
 registerAllMcpHandlers(mcpServer, getContext);
 dynamicRegistry = new DynamicRegistry(mcpServer, getContext);
