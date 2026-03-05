@@ -6,6 +6,7 @@ import type {
 } from "../types/session";
 import { buildSystemPrompt } from "./agent";
 import type { AgentBridge } from "./agent-bridge";
+import type { SessionStore } from "./session-store";
 
 /**
  * Deep-merge two SessionContext objects.
@@ -344,4 +345,140 @@ export async function summarizeMessages(
   const summary = await llmCall(llmMessages, model);
 
   return { summary, originalMessageCount };
+}
+
+// ---------------------------------------------------------------------------
+// Auto-Context Enrichment
+// ---------------------------------------------------------------------------
+
+/**
+ * Auto-context event types that trigger session context enrichment.
+ */
+export interface AutoContextEvent {
+  type:
+    | "page_modified"
+    | "job_created"
+    | "approval_pending"
+    | "approval_resolved";
+  pageName?: string;
+  jobId?: string;
+  jobName?: string;
+  approvalId?: string;
+  question?: string;
+  result?: string;
+}
+
+/**
+ * Auto-enrich a session's context based on an event.
+ * Uses addRelevantPage and addWorkingMemory helpers internally.
+ * Returns the new context (does not persist - caller must save).
+ */
+export function autoEnrichContext(
+  ctx: SessionContext,
+  event: AutoContextEvent
+): SessionContext {
+  switch (event.type) {
+    case "page_modified":
+      if (event.pageName) {
+        return addRelevantPage(ctx, event.pageName);
+      }
+      return ctx;
+
+    case "job_created":
+      if (event.jobId) {
+        return addWorkingMemory(
+          ctx,
+          `job:${event.jobId}`,
+          `${event.jobName || event.jobId} (created)`,
+          "auto"
+        );
+      }
+      return ctx;
+
+    case "approval_pending":
+      if (event.approvalId) {
+        return addWorkingMemory(
+          ctx,
+          `approval:${event.approvalId}`,
+          `pending: ${event.question || "awaiting approval"}`,
+          "auto"
+        );
+      }
+      return ctx;
+
+    case "approval_resolved":
+      if (event.approvalId) {
+        return addWorkingMemory(
+          ctx,
+          `approval:${event.approvalId}`,
+          `resolved: ${event.result || "approved"}`,
+          "auto"
+        );
+      }
+      return ctx;
+
+    default:
+      return ctx;
+  }
+}
+
+/**
+ * Map a tool operation name to an auto-context event, if applicable.
+ * Returns null if the operation does not trigger auto-context.
+ */
+export function operationToAutoContextEvent(
+  operationName: string,
+  args: Record<string, unknown>
+): AutoContextEvent | null {
+  switch (operationName) {
+    case "page_create":
+      return { type: "page_modified", pageName: args.name as string };
+    case "page_read":
+      return { type: "page_modified", pageName: args.name as string };
+    case "block_append":
+      return { type: "page_modified", pageName: args.page as string };
+    case "create_job":
+      return {
+        type: "job_created",
+        jobId: args.name as string,
+        jobName: args.name as string,
+      };
+    default:
+      return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Session ID Extraction (MCP Request Routing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract a session ID from MCP tool call arguments or headers.
+ * Priority: (1) _sessionId in args, (2) X-Session-Id header, (3) auto-associate if exactly 1 active session.
+ */
+export function extractSessionId(
+  args: Record<string, unknown>,
+  store: SessionStore,
+  agentId: string,
+  headers?: Record<string, string>
+): string | null {
+  // 1. Explicit _sessionId in tool args
+  if (typeof args._sessionId === "string" && args._sessionId) {
+    return args._sessionId;
+  }
+
+  // 2. X-Session-Id header (check both casings)
+  const headerSessionId =
+    headers?.["x-session-id"] || headers?.["X-Session-Id"];
+  if (typeof headerSessionId === "string" && headerSessionId) {
+    return headerSessionId;
+  }
+
+  // 3. Auto-associate if exactly one active session for this agent
+  const activeSessions = store.list(agentId, { status: "active" });
+  if (activeSessions.length === 1) {
+    return activeSessions[0].id;
+  }
+
+  return null;
 }
