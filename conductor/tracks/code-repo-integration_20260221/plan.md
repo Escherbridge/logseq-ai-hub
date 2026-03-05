@@ -260,14 +260,14 @@ Work claim system for multi-agent coordination and conductor-style project/track
 
 Pi.dev integration as opt-in configurable agent execution platform with per-track agent profiles.
 
-### Task 5.1: Plugin — Pi.dev settings [ ]
+### Task 5.1: Plugin — Pi.dev settings [x] [347a243]
 
 **Files:** `src/main/logseq_ai_hub/core.cljs` (modify)
 
 - Add settings: `piDevEnabled` (boolean, default false), `piDevInstallPath` (string), `piDevDefaultModel` (string, default `anthropic/claude-sonnet-4`), `piDevRpcPort` (number, default 0), `piDevMaxConcurrentSessions` (number, default 3)
 - Settings migration for existing installs
 
-### Task 5.2: Plugin — Agent profile page scanner [ ]
+### Task 5.2: Plugin — Agent profile page scanner [x] [a12015a]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/pi_agents.cljs`, `src/test/logseq_ai_hub/code_repo/pi_agents_test.cljs`
 
@@ -277,7 +277,7 @@ Pi.dev integration as opt-in configurable agent execution platform with per-trac
 - Register operations in `agent_bridge.cljs`
 - Write tests
 
-### Task 5.3: Server — PiDevManager service [ ]
+### Task 5.3: Server — PiDevManager service [x] [a12015a]
 
 **Files:** `server/src/services/pidev-manager.ts`, `server/tests/pidev-manager.test.ts`
 
@@ -296,7 +296,7 @@ Pi.dev integration as opt-in configurable agent execution platform with per-trac
 - Version detection + adapter layer for RPC protocol differences
 - Tests: spawn/send/stop lifecycle, concurrent session limits, context injection, error handling when pi unavailable
 
-### Task 5.4: Server — Pi.dev MCP tools [ ]
+### Task 5.4: Server — Pi.dev MCP tools [x] [a12015a]
 
 **Files:** `server/src/services/mcp/pidev-tools.ts`, `server/tests/pidev-tools.test.ts`
 
@@ -306,7 +306,7 @@ Pi.dev integration as opt-in configurable agent execution platform with per-trac
 - All check `piDevEnabled` first — return informative error if disabled
 - Tests
 
-### Task 5.5: Server — Integrate PiDevManager [ ]
+### Task 5.5: Server — Integrate PiDevManager [x] [a12015a]
 
 **Files:** `server/src/types/mcp.ts` (modify), `server/src/index.ts` (modify), `server/src/services/mcp/index.ts` (modify)
 
