@@ -13,6 +13,7 @@
             [logseq-ai-hub.code-repo.safeguard :as safeguard]
             [logseq-ai-hub.code-repo.work :as work]
             [logseq-ai-hub.code-repo.tasks :as tasks]
+            [logseq-ai-hub.code-repo.pi-agents :as pi-agents]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -457,7 +458,12 @@
    "task_add"               tasks/handle-task-add
    "task_update"            tasks/handle-task-update
    "task_list"              tasks/handle-task-list
-   "project_dashboard"      tasks/handle-project-dashboard})
+   "project_dashboard"      tasks/handle-project-dashboard
+   ;; Pi.dev agent profile operations (for MCP server)
+   "pi_agent_list"          pi-agents/handle-pi-agent-list
+   "pi_agent_get"           pi-agents/handle-pi-agent-get
+   "pi_agent_create"        pi-agents/handle-pi-agent-create
+   "pi_agent_update"        pi-agents/handle-pi-agent-update})
 
 ;; =============================================================================
 ;; Event Dispatcher

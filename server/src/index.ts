@@ -10,6 +10,7 @@ import { ApprovalStore } from "./services/approval-store";
 import { DynamicRegistry } from "./services/mcp/dynamic-registry";
 import { SafeguardService } from "./services/safeguard-service";
 import { WorkClaimStore } from "./services/work-store";
+import { PiDevManager } from "./services/pidev-manager";
 
 const config = loadConfig();
 
@@ -29,6 +30,13 @@ const sessionStore = new SessionStore(db);
 const approvalStore = new ApprovalStore();
 const safeguardService = new SafeguardService(agentBridge, approvalStore);
 const workStore = new WorkClaimStore();
+const piDevManager = new PiDevManager(agentBridge, {
+  enabled: false, // Disabled by default — users enable via plugin settings
+  installPath: "",
+  defaultModel: "anthropic/claude-sonnet-4",
+  rpcPort: 0,
+  maxConcurrentSessions: 3,
+});
 
 // Initialize MCP server and register all tools/resources/prompts
 const mcpServer = createMcpServer();
@@ -42,6 +50,7 @@ const getContext = () => ({
   sessionStore,
   safeguardService,
   workStore,
+  piDevManager,
 });
 registerAllMcpHandlers(mcpServer, getContext);
 dynamicRegistry = new DynamicRegistry(mcpServer, getContext);

@@ -14,6 +14,7 @@ import { registerLessonTools } from "./lesson-tools";
 import { registerSafeguardTools } from "./safeguard-tools";
 import { registerWorkTools } from "./work-tools";
 import { registerTaskTools } from "./task-tools";
+import { registerPiDevTools } from "./pidev-tools";
 import { registerResources } from "./resources";
 import { registerPrompts } from "./prompts";
 
@@ -46,6 +47,9 @@ export function registerAllMcpHandlers(
   // P7: Work coordination (4 tools) + Task management (7 tools)
   registerWorkTools(server, getContext);
   registerTaskTools(server, getContext);
+
+  // P8: Pi.dev agent platform (9 tools)
+  registerPiDevTools(server, getContext);
 
   // P2: Resources (6 resources)
   registerResources(server, getContext);

@@ -6,6 +6,7 @@ import type { DynamicRegistry } from "../services/mcp/dynamic-registry";
 import type { SessionStore } from "../services/session-store";
 import type { SafeguardService } from "../services/safeguard-service";
 import type { WorkClaimStore } from "../services/work-store";
+import type { PiDevManager } from "../services/pidev-manager";
 
 /**
  * Context passed to MCP tool handlers so they can interact
@@ -21,6 +22,7 @@ export interface McpToolContext {
   sessionStore?: SessionStore;
   safeguardService?: SafeguardService;
   workStore?: WorkClaimStore;
+  piDevManager?: PiDevManager;
 }
 
 /**
