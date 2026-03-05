@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpToolContext } from "../../types/mcp";
-import { NotFoundError } from "../session-store";
+import { NotFoundError, type SessionStore } from "../session-store";
 
 function err(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true as const };
@@ -182,4 +182,32 @@ export function registerSessionTools(server: McpServer, getContext: () => McpToo
       return ok({ archived: true });
     },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Tool Call Logging
+// ---------------------------------------------------------------------------
+
+/**
+ * Log an MCP tool call and its result to a session's message history.
+ * Fire-and-forget: errors are silently ignored.
+ */
+export function logToolCallToSession(
+  store: SessionStore,
+  sessionId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+  result: unknown
+): void {
+  try {
+    store.addMessage({
+      session_id: sessionId,
+      role: "tool",
+      content: `[MCP] ${toolName}: ${JSON.stringify(result)}`,
+      metadata: { toolName, args },
+    });
+    store.touchActivity(sessionId);
+  } catch {
+    // Silently ignore errors (fire-and-forget)
+  }
 }
