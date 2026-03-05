@@ -70,7 +70,7 @@ Foundation layer — project registry pages discovered via tag scanning, exposed
 
 ADR pages linked to projects and lesson-learned memory integration. Builds on Phase 1 project foundation.
 
-### Task 2.1: Plugin — ADR page scanner and parser [ ]
+### Task 2.1: Plugin — ADR page scanner and parser [x] [2ac8f99]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/adr.cljs`, `src/test/logseq_ai_hub/code_repo/adr_test.cljs`
 
@@ -79,7 +79,7 @@ ADR pages linked to projects and lesson-learned memory integration. Builds on Ph
 - Store in registry atom under `:adrs` category
 - Write tests
 
-### Task 2.2: Plugin — ADR bridge handlers [ ]
+### Task 2.2: Plugin — ADR bridge handlers [x] [2ac8f99+49c7768]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/bridge.cljs` (extend)
 
@@ -88,7 +88,7 @@ ADR pages linked to projects and lesson-learned memory integration. Builds on Ph
 - Register `"adr_list"` and `"adr_create"` operations in `agent_bridge.cljs`
 - Write tests
 
-### Task 2.3: Server — ADR MCP tools [ ]
+### Task 2.3: Server — ADR MCP tools [x] [65ea5e9+49c7768]
 
 **Files:** `server/src/services/mcp/adr-tools.ts`, `server/tests/adr-tools.test.ts`
 
@@ -97,7 +97,7 @@ ADR pages linked to projects and lesson-learned memory integration. Builds on Ph
 - Implement `adr_create` tool — params: `{project, title, context, decision, consequences, status?}`, bridge call to `adr_create`
 - Tests
 
-### Task 2.4: Plugin — Lesson memory storage and search [ ]
+### Task 2.4: Plugin — Lesson memory storage and search [x] [e818a0d+49c7768]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/lessons.cljs`, `src/test/logseq_ai_hub/code_repo/lessons_test.cljs`
 
@@ -107,7 +107,7 @@ ADR pages linked to projects and lesson-learned memory integration. Builds on Ph
 - Register `"lesson_store"` and `"lesson_search"` operations in `agent_bridge.cljs`
 - Write tests
 
-### Task 2.5: Server — Lesson MCP tools [ ]
+### Task 2.5: Server — Lesson MCP tools [x] [270113e+49c7768]
 
 **Files:** `server/src/services/mcp/lesson-tools.ts`, `server/tests/lesson-tools.test.ts`
 
@@ -116,7 +116,7 @@ ADR pages linked to projects and lesson-learned memory integration. Builds on Ph
 - Implement `lesson_search` tool — params: `{project?, query, category?}`
 - Tests
 
-### Task 2.6: Server — Register knowledge tools in index [ ]
+### Task 2.6: Server — Register knowledge tools in index [x] [49c7768]
 
 **Files:** `server/src/services/mcp/index.ts` (modify)
 
