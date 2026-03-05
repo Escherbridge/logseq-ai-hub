@@ -117,4 +117,84 @@ export function registerResources(server: McpServer, getContext: () => McpToolCo
       }
     },
   );
+
+  // logseq://projects/{name}/adrs - Architecture Decision Records for a project
+  server.resource(
+    "logseq-project-adrs",
+    new ResourceTemplate("logseq://projects/{name}/adrs", { list: undefined }),
+    { description: "Architecture Decision Records for a code project", mimeType: "application/json" },
+    async (uri, variables) => {
+      const ctx = getContext();
+      const name = variables.name as string;
+      if (!ctx.bridge?.isPluginConnected()) {
+        return { contents: [{ uri: uri.href, text: "Error: Logseq plugin not connected", mimeType: "text/plain" }] };
+      }
+      try {
+        const result = await ctx.bridge.sendRequest("adr_list", { project: name }, ctx.traceId);
+        return { contents: [{ uri: uri.href, text: JSON.stringify(result, null, 2), mimeType: "application/json" }] };
+      } catch (err: any) {
+        return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
+      }
+    },
+  );
+
+  // logseq://projects/{name}/lessons - Lessons learned for a project
+  server.resource(
+    "logseq-project-lessons",
+    new ResourceTemplate("logseq://projects/{name}/lessons", { list: undefined }),
+    { description: "Lessons learned for a code project", mimeType: "application/json" },
+    async (uri, variables) => {
+      const ctx = getContext();
+      const name = variables.name as string;
+      if (!ctx.bridge?.isPluginConnected()) {
+        return { contents: [{ uri: uri.href, text: "Error: Logseq plugin not connected", mimeType: "text/plain" }] };
+      }
+      try {
+        const result = await ctx.bridge.sendRequest("lesson_search", { project: name }, ctx.traceId);
+        return { contents: [{ uri: uri.href, text: JSON.stringify(result, null, 2), mimeType: "application/json" }] };
+      } catch (err: any) {
+        return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
+      }
+    },
+  );
+
+  // logseq://projects/{name}/tracks - Tracks/tasks for a project
+  server.resource(
+    "logseq-project-tracks",
+    new ResourceTemplate("logseq://projects/{name}/tracks", { list: undefined }),
+    { description: "Tracks and tasks for a code project", mimeType: "application/json" },
+    async (uri, variables) => {
+      const ctx = getContext();
+      const name = variables.name as string;
+      if (!ctx.bridge?.isPluginConnected()) {
+        return { contents: [{ uri: uri.href, text: "Error: Logseq plugin not connected", mimeType: "text/plain" }] };
+      }
+      try {
+        const result = await ctx.bridge.sendRequest("track_list", { project: name }, ctx.traceId);
+        return { contents: [{ uri: uri.href, text: JSON.stringify(result, null, 2), mimeType: "application/json" }] };
+      } catch (err: any) {
+        return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
+      }
+    },
+  );
+
+  // logseq://projects/{name}/safeguards - Safeguard policies for a project
+  server.resource(
+    "logseq-project-safeguards",
+    new ResourceTemplate("logseq://projects/{name}/safeguards", { list: undefined }),
+    { description: "Safeguard policies for a code project", mimeType: "application/json" },
+    async (uri, variables) => {
+      const ctx = getContext();
+      const name = variables.name as string;
+      if (!ctx.bridge?.isPluginConnected()) {
+        return { contents: [{ uri: uri.href, text: "Error: Logseq plugin not connected", mimeType: "text/plain" }] };
+      }
+      try {
+        const result = await ctx.bridge.sendRequest("safeguard_policy_get", { project: name }, ctx.traceId);
+        return { contents: [{ uri: uri.href, text: JSON.stringify(result, null, 2), mimeType: "application/json" }] };
+      } catch (err: any) {
+        return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
+      }
+    },
+  );
 }
