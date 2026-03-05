@@ -7,6 +7,7 @@ import { registerMessagingTools } from "./messaging-tools";
 import { registerCharacterTools } from "./character-tools";
 import { registerApprovalTools } from "./approval-tools";
 import { registerRegistryTools } from "./registry-tools";
+import { registerSessionTools } from "./session-tools";
 import { registerResources } from "./resources";
 import { registerPrompts } from "./prompts";
 
@@ -24,6 +25,9 @@ export function registerAllMcpHandlers(
 
   // P1: Registry operations (4 tools)
   registerRegistryTools(server, getContext);
+
+  // P4: Session management (7 tools)
+  registerSessionTools(server, getContext);
 
   // P2: Resources (5 resources)
   registerResources(server, getContext);
