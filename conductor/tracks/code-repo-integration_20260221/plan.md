@@ -190,7 +190,7 @@ Layered human-in-the-loop safeguard system for agent operations. P0 priority —
 
 Work claim system for multi-agent coordination and conductor-style project/track/task management stored as Logseq pages.
 
-### Task 4.1: Server — WorkClaimStore [ ]
+### Task 4.1: Server — WorkClaimStore [x] [5ff976c]
 
 **Files:** `server/src/services/work-store.ts`, `server/tests/work-store.test.ts`
 
@@ -203,7 +203,7 @@ Work claim system for multi-agent coordination and conductor-style project/track
 - `checkConflict(path)` — checks if path overlaps with existing claims (glob matching)
 - Tests: claim/release, conflict detection, glob patterns, session cleanup
 
-### Task 4.2: Server — Work coordination MCP tools [ ]
+### Task 4.2: Server — Work coordination MCP tools [x] [31aa874]
 
 **Files:** `server/src/services/mcp/work-tools.ts`, `server/tests/work-tools.test.ts`
 
@@ -214,7 +214,7 @@ Work claim system for multi-agent coordination and conductor-style project/track
 - Implement `work_log` tool — params: `{project, action, details}` → bridge call to append block on `Projects/{project}/log` page
 - Tests
 
-### Task 4.3: Plugin — Work log bridge handler [ ]
+### Task 4.3: Plugin — Work log bridge handler [x] [e9edd38]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/bridge.cljs` (extend)
 
@@ -222,7 +222,7 @@ Work claim system for multi-agent coordination and conductor-style project/track
 - Register `"work_log"` operation in `agent_bridge.cljs`
 - Write tests
 
-### Task 4.4: Plugin — Track/task page management handlers [ ]
+### Task 4.4: Plugin — Track/task page management handlers [x] [0046b84]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/tasks.cljs`, `src/test/logseq_ai_hub/code_repo/tasks_test.cljs`
 
@@ -236,7 +236,7 @@ Work claim system for multi-agent coordination and conductor-style project/track
 - Register all operations in `agent_bridge.cljs`
 - Write tests
 
-### Task 4.5: Server — Track/task MCP tools [ ]
+### Task 4.5: Server — Track/task MCP tools [x] [31aa874]
 
 **Files:** `server/src/services/mcp/task-tools.ts`, `server/tests/task-tools.test.ts`
 
@@ -245,7 +245,7 @@ Work claim system for multi-agent coordination and conductor-style project/track
 - All delegate to bridge handlers
 - Tests
 
-### Task 4.6: Server — Integrate work + task services [ ]
+### Task 4.6: Server — Integrate work + task services [x] [9359463]
 
 **Files:** `server/src/types/mcp.ts` (modify), `server/src/index.ts` (modify), `server/src/services/mcp/index.ts` (modify)
 
