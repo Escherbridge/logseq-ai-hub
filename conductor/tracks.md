@@ -107,7 +107,7 @@
 - **Description:** Persistent, context-rich agent sessions backed by SQLite. Replaces the in-memory 20-message conversation store with durable sessions that survive restarts, include working context (focus, relevant pages, working memory), automatic context injection (recent activity, relevant memories), session lifecycle tools, and session handoff between interfaces (agent chat ↔ MCP).
 
 ### code-repo-integration_20260221 -- Code Repository Integration
-- **Status:** in-progress
+- **Status:** completed
 - **Branch:** `track/code-repo-integration_20260221`
 - **Priority:** P1
 - **Estimated:** 20-30 hours
