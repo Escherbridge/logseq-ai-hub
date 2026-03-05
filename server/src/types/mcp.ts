@@ -4,6 +4,7 @@ import type { Config } from "../config";
 import type { ApprovalStore } from "../services/approval-store";
 import type { DynamicRegistry } from "../services/mcp/dynamic-registry";
 import type { SessionStore } from "../services/session-store";
+import type { SafeguardService } from "../services/safeguard-service";
 
 /**
  * Context passed to MCP tool handlers so they can interact
@@ -17,6 +18,7 @@ export interface McpToolContext {
   approvalStore?: ApprovalStore;
   dynamicRegistry?: DynamicRegistry;
   sessionStore?: SessionStore;
+  safeguardService?: SafeguardService;
 }
 
 /**

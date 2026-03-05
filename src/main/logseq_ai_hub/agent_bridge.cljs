@@ -10,6 +10,7 @@
             [logseq-ai-hub.code-repo.bridge :as code-repo-bridge]
             [logseq-ai-hub.code-repo.adr :as adr]
             [logseq-ai-hub.code-repo.lessons :as lessons]
+            [logseq-ai-hub.code-repo.safeguard :as safeguard]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -441,7 +442,10 @@
    "adr_create"         adr/handle-adr-create
    ;; Lesson operations (for MCP server)
    "lesson_store"       lessons/handle-lesson-store
-   "lesson_search"      lessons/handle-lesson-search})
+   "lesson_search"      lessons/handle-lesson-search
+   ;; Safeguard operations (for MCP server)
+   "safeguard_policy_get"    safeguard/handle-safeguard-policy-get
+   "safeguard_audit_append"  safeguard/handle-safeguard-audit-append})
 
 ;; =============================================================================
 ;; Event Dispatcher

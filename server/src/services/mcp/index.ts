@@ -11,6 +11,7 @@ import { registerSessionTools } from "./session-tools";
 import { registerProjectTools } from "./project-tools";
 import { registerAdrTools } from "./adr-tools";
 import { registerLessonTools } from "./lesson-tools";
+import { registerSafeguardTools } from "./safeguard-tools";
 import { registerResources } from "./resources";
 import { registerPrompts } from "./prompts";
 
@@ -36,6 +37,9 @@ export function registerAllMcpHandlers(
   registerProjectTools(server, getContext);
   registerAdrTools(server, getContext);
   registerLessonTools(server, getContext);
+
+  // P6: Safeguard pipeline (5 tools)
+  registerSafeguardTools(server, getContext);
 
   // P2: Resources (6 resources)
   registerResources(server, getContext);

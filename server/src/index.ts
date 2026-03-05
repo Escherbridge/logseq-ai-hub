@@ -8,6 +8,7 @@ import { createMcpServer } from "./services/mcp-server";
 import { registerAllMcpHandlers } from "./services/mcp/index";
 import { ApprovalStore } from "./services/approval-store";
 import { DynamicRegistry } from "./services/mcp/dynamic-registry";
+import { SafeguardService } from "./services/safeguard-service";
 
 const config = loadConfig();
 
@@ -25,6 +26,7 @@ const db = getDatabase(config.databasePath);
 const agentBridge = new AgentBridge(config.agentRequestTimeout);
 const sessionStore = new SessionStore(db);
 const approvalStore = new ApprovalStore();
+const safeguardService = new SafeguardService(agentBridge, approvalStore);
 
 // Initialize MCP server and register all tools/resources/prompts
 const mcpServer = createMcpServer();
@@ -36,6 +38,7 @@ const getContext = () => ({
   approvalStore,
   dynamicRegistry,
   sessionStore,
+  safeguardService,
 });
 registerAllMcpHandlers(mcpServer, getContext);
 dynamicRegistry = new DynamicRegistry(mcpServer, getContext);
