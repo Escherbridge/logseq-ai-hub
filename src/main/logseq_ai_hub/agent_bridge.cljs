@@ -11,6 +11,8 @@
             [logseq-ai-hub.code-repo.adr :as adr]
             [logseq-ai-hub.code-repo.lessons :as lessons]
             [logseq-ai-hub.code-repo.safeguard :as safeguard]
+            [logseq-ai-hub.code-repo.work :as work]
+            [logseq-ai-hub.code-repo.tasks :as tasks]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -445,7 +447,17 @@
    "lesson_search"      lessons/handle-lesson-search
    ;; Safeguard operations (for MCP server)
    "safeguard_policy_get"    safeguard/handle-safeguard-policy-get
-   "safeguard_audit_append"  safeguard/handle-safeguard-audit-append})
+   "safeguard_audit_append"  safeguard/handle-safeguard-audit-append
+   ;; Work log operations (for MCP server)
+   "work_log"               work/handle-work-log
+   ;; Track/task operations (for MCP server)
+   "track_create"           tasks/handle-track-create
+   "track_list"             tasks/handle-track-list
+   "track_update"           tasks/handle-track-update
+   "task_add"               tasks/handle-task-add
+   "task_update"            tasks/handle-task-update
+   "task_list"              tasks/handle-task-list
+   "project_dashboard"      tasks/handle-project-dashboard})
 
 ;; =============================================================================
 ;; Event Dispatcher

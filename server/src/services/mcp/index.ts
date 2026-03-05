@@ -12,6 +12,8 @@ import { registerProjectTools } from "./project-tools";
 import { registerAdrTools } from "./adr-tools";
 import { registerLessonTools } from "./lesson-tools";
 import { registerSafeguardTools } from "./safeguard-tools";
+import { registerWorkTools } from "./work-tools";
+import { registerTaskTools } from "./task-tools";
 import { registerResources } from "./resources";
 import { registerPrompts } from "./prompts";
 
@@ -40,6 +42,10 @@ export function registerAllMcpHandlers(
 
   // P6: Safeguard pipeline (5 tools)
   registerSafeguardTools(server, getContext);
+
+  // P7: Work coordination (4 tools) + Task management (7 tools)
+  registerWorkTools(server, getContext);
+  registerTaskTools(server, getContext);
 
   // P2: Resources (6 resources)
   registerResources(server, getContext);
