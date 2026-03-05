@@ -82,6 +82,26 @@ export function registerResources(server: McpServer, getContext: () => McpToolCo
     },
   );
 
+  // logseq://projects/{name} - Project details with architecture context
+  server.resource(
+    "logseq-project",
+    new ResourceTemplate("logseq://projects/{name}", { list: undefined }),
+    { description: "Code project details including architecture context", mimeType: "application/json" },
+    async (uri, variables) => {
+      const ctx = getContext();
+      const name = variables.name as string;
+      if (!ctx.bridge?.isPluginConnected()) {
+        return { contents: [{ uri: uri.href, text: "Error: Logseq plugin not connected", mimeType: "text/plain" }] };
+      }
+      try {
+        const result = await ctx.bridge.sendRequest("project_get", { name }, ctx.traceId);
+        return { contents: [{ uri: uri.href, text: JSON.stringify(result, null, 2), mimeType: "application/json" }] };
+      } catch (err: any) {
+        return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
+      }
+    },
+  );
+
   // logseq://contacts - Known contacts (server-side, no bridge needed)
   server.resource(
     "logseq-contacts",

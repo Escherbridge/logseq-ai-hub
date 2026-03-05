@@ -8,6 +8,7 @@ import { registerCharacterTools } from "./character-tools";
 import { registerApprovalTools } from "./approval-tools";
 import { registerRegistryTools } from "./registry-tools";
 import { registerSessionTools } from "./session-tools";
+import { registerProjectTools } from "./project-tools";
 import { registerResources } from "./resources";
 import { registerPrompts } from "./prompts";
 
@@ -28,6 +29,9 @@ export function registerAllMcpHandlers(
 
   // P4: Session management (7 tools)
   registerSessionTools(server, getContext);
+
+  // P5: Code repository integration (2 tools)
+  registerProjectTools(server, getContext);
 
   // P2: Resources (5 resources)
   registerResources(server, getContext);

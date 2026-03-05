@@ -7,6 +7,7 @@
             [logseq-ai-hub.secrets :as secrets]
             [logseq-ai-hub.memory :as memory]
             [logseq-ai-hub.registry.bridge :as registry-bridge]
+            [logseq-ai-hub.code-repo.bridge :as code-repo-bridge]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -429,7 +430,10 @@
    "registry_get"       registry-bridge/handle-registry-get
    "registry_search"    registry-bridge/handle-registry-search
    "registry_refresh"   registry-bridge/handle-registry-refresh
-   "execute_skill"      registry-bridge/handle-execute-skill})
+   "execute_skill"      registry-bridge/handle-execute-skill
+   ;; Code repository operations (for MCP server)
+   "project_list"       code-repo-bridge/handle-project-list
+   "project_get"        code-repo-bridge/handle-project-get})
 
 ;; =============================================================================
 ;; Event Dispatcher

@@ -10,6 +10,7 @@
             [logseq-ai-hub.settings-writer :as settings-writer]
             [logseq-ai-hub.llm.enriched :as enriched]
             [logseq-ai-hub.registry.init :as registry-init]
+            [logseq-ai-hub.code-repo.init :as code-repo-init]
             [clojure.string :as str]))
 
 (def settings-schema
@@ -150,6 +151,7 @@
   (sub-agents/init!)
   (job-runner-init/init!)
   (registry-init/init!)
+  (code-repo-init/init!)
   (agent-bridge/init!))
 
 (defn init []
