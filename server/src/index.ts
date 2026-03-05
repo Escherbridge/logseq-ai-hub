@@ -3,7 +3,7 @@ import { getDatabase } from "./db/connection";
 import { createRouter } from "./router";
 import { sseManager } from "./services/sse";
 import { AgentBridge } from "./services/agent-bridge";
-import { ConversationStore } from "./services/conversations";
+import { SessionStore } from "./services/session-store";
 import { createMcpServer } from "./services/mcp-server";
 import { registerAllMcpHandlers } from "./services/mcp/index";
 import { ApprovalStore } from "./services/approval-store";
@@ -23,7 +23,7 @@ agentWarnings.forEach((w) => console.warn(`  Warning: ${w}`));
 
 const db = getDatabase(config.databasePath);
 const agentBridge = new AgentBridge(config.agentRequestTimeout);
-const conversations = new ConversationStore();
+const sessionStore = new SessionStore(db);
 const approvalStore = new ApprovalStore();
 
 // Initialize MCP server and register all tools/resources/prompts
@@ -39,7 +39,7 @@ const getContext = () => ({
 registerAllMcpHandlers(mcpServer, getContext);
 dynamicRegistry = new DynamicRegistry(mcpServer, getContext);
 
-const router = createRouter({ config, db, agentBridge, conversations, approvalStore });
+const router = createRouter({ config, db, agentBridge, sessionStore, approvalStore });
 
 sseManager.start();
 

@@ -1,7 +1,7 @@
 import type { Config } from "./config";
 import type { Database } from "bun:sqlite";
 import type { AgentBridge } from "./services/agent-bridge";
-import type { ConversationStore } from "./services/conversations";
+import type { SessionStore } from "./services/session-store";
 import type { ApprovalStore } from "./services/approval-store";
 import { handleHealth } from "./routes/health";
 import {
@@ -34,7 +34,7 @@ export interface RouteContext {
   config: Config;
   db: Database;
   agentBridge?: AgentBridge;
-  conversations?: ConversationStore;
+  sessionStore?: SessionStore;
   approvalStore?: ApprovalStore;
   traceId?: string;
 }
@@ -231,10 +231,10 @@ export function createRouter(ctx: RouteContext) {
       method: "POST",
       pattern: "/api/agent/chat",
       handler: (req, ctx) => {
-        if (!ctx.conversations) {
+        if (!ctx.sessionStore) {
           return Response.json({ success: false, error: "Agent not initialized" }, { status: 503 });
         }
-        return handleAgentChat(req, ctx.config, ctx.agentBridge, ctx.conversations, ctx.traceId);
+        return handleAgentChat(req, ctx.config, ctx.agentBridge, ctx.sessionStore, ctx.traceId);
       },
     },
     // Characters API
