@@ -253,7 +253,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 **Goal:** Build the session context system that resolves `relevant_pages` into actual page content, manages working memory with key-value operations, and produces enriched system prompts that include session context.
 
-### Task 2.1: Implement Context Merge Logic
+### Task 2.1: Implement Context Merge Logic [x] [9bd37b2]
 
 **TDD Cycle:**
 - RED: Write tests for `mergeSessionContext(existing, updates)` -- a deep merge that handles the context structure correctly.
@@ -277,7 +277,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 2.2: Implement Working Memory Helpers
+### Task 2.2: Implement Working Memory Helpers [x] [9fa3b60]
 
 **TDD Cycle:**
 - RED: Write tests for `addWorkingMemory(context, key, value, source?)` and `removeWorkingMemory(context, key)`.
@@ -300,7 +300,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 2.3: Implement Relevant Pages Management
+### Task 2.3: Implement Relevant Pages Management [x] [5a3b268]
 
 **TDD Cycle:**
 - RED: Write tests for `addRelevantPage(context, pageName)` and `removeRelevantPage(context, pageName)`.
@@ -322,7 +322,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 2.4: Build Session System Prompt
+### Task 2.4: Build Session System Prompt [x] [151be5b]
 
 **TDD Cycle:**
 - RED: Write tests for `buildSessionSystemPrompt(session, pageContents?)` that produces a system prompt string enriched with session context.
@@ -345,7 +345,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 2.5: Implement Page Content Resolution via Agent Bridge
+### Task 2.5: Implement Page Content Resolution via Agent Bridge [x] [dd6e10e]
 
 **TDD Cycle:**
 - RED: Write tests for `resolveRelevantPages(bridge, pageNames)` that calls the Agent Bridge to fetch page content for each page name.
@@ -384,7 +384,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 **Goal:** Rewire the `POST /api/agent/chat` endpoint to use the `SessionStore` instead of the in-memory `ConversationStore`. Add session context to LLM calls and return `sessionId` in responses.
 
-### Task 3.1: Update Agent Chat to Create/Load Sessions
+### Task 3.1: Update Agent Chat to Create/Load Sessions [x] [1345ee1]
 
 **TDD Cycle:**
 - RED: Write tests for the updated `handleAgentChat` that accepts `{ message, sessionId? }` and uses `SessionStore`. Test: no sessionId creates a new session; providing a valid sessionId loads it; invalid sessionId creates a new session.
@@ -407,7 +407,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 3.2: Include Session Context in LLM System Prompt
+### Task 3.2: Include Session Context in LLM System Prompt [x] [1345ee1]
 
 **TDD Cycle:**
 - RED: Write tests verifying that the system prompt sent to the LLM includes session context (focus, working memory, page content).
@@ -429,7 +429,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 3.3: Implement Configurable History Loading
+### Task 3.3: Implement Configurable History Loading [x] [36e13f2]
 
 **TDD Cycle:**
 - RED: Write tests for loading the last N messages from a session, with N configurable (default 50).
@@ -451,7 +451,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 3.4: Store Tool Calls in Session Messages
+### Task 3.4: Store Tool Calls in Session Messages [x] [1345ee1]
 
 **TDD Cycle:**
 - RED: Write tests verifying that tool calls and tool results are stored as session messages with correct metadata.
@@ -472,7 +472,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 3.5: Wire SessionStore into Router and Index
+### Task 3.5: Wire SessionStore into Router and Index [x] [1bb921d]
 
 **TDD Cycle:**
 - RED: Verify that the router creates the route with `SessionStore` instead of `ConversationStore`.
@@ -495,7 +495,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 3.6: Remove Legacy ConversationStore
+### Task 3.6: Remove Legacy ConversationStore [x] [1bb921d]
 
 **TDD Cycle:**
 - RED: Verify that all references to `ConversationStore` are removed and tests still pass.
@@ -537,7 +537,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 **Goal:** Expose 7 MCP tools for session management so that Claude Code (via MCP) can create, list, update, and archive sessions, as well as set focus and manage working memory.
 
-### Task 4.1: Implement `session_create` MCP Tool
+### Task 4.1: Implement `session_create` MCP Tool [x] [80c8b9c]
 
 **TDD Cycle:**
 - RED: Write tests for the `session_create` tool registration and handler.
@@ -563,7 +563,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 4.2: Implement `session_get` and `session_list` MCP Tools
+### Task 4.2: Implement `session_get` and `session_list` MCP Tools [x] [80c8b9c]
 
 **TDD Cycle:**
 - RED: Write tests for `session_get` and `session_list` tool handlers.
@@ -589,7 +589,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 4.3: Implement `session_update_context` MCP Tool
+### Task 4.3: Implement `session_update_context` MCP Tool [x] [80c8b9c]
 
 **TDD Cycle:**
 - RED: Write tests for the `session_update_context` tool that does a merge (not replace) of the context object.
@@ -612,7 +612,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 4.4: Implement `session_set_focus` and `session_add_memory` MCP Tools
+### Task 4.4: Implement `session_set_focus` and `session_add_memory` MCP Tools [x] [80c8b9c]
 
 **TDD Cycle:**
 - RED: Write tests for convenience tools `session_set_focus` and `session_add_memory`.
@@ -637,7 +637,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 4.5: Implement `session_archive` MCP Tool
+### Task 4.5: Implement `session_archive` MCP Tool [x] [80c8b9c]
 
 **TDD Cycle:**
 - RED: Write tests for `session_archive` tool.
@@ -659,7 +659,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 4.6: Register Session Tools in MCP Server
+### Task 4.6: Register Session Tools in MCP Server [x] [c00dff6]
 
 **TDD Cycle:**
 - RED: Verify `registerAllMcpHandlers` includes session tools.
@@ -692,7 +692,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 **Goal:** Enable a session started via agent chat to be continued via MCP tool calls and vice versa. The same `sessionId` works across both interfaces. MCP tool calls can be associated with a session via header or parameter.
 
-### Task 5.1: Extract Session ID from MCP Requests
+### Task 5.1: Extract Session ID from MCP Requests [x] [b233870]
 
 **TDD Cycle:**
 - RED: Write tests for a helper that extracts a session ID from MCP tool call arguments or request headers.
@@ -714,7 +714,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 5.2: Log MCP Tool Calls to Session History
+### Task 5.2: Log MCP Tool Calls to Session History [x] [01a93dc]
 
 **TDD Cycle:**
 - RED: Write tests verifying that when a session ID is associated with an MCP tool call, the tool call and its result are logged to the session's message history.
@@ -737,7 +737,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 5.3: Implement Cross-Interface Session Continuity Test
+### Task 5.3: Implement Cross-Interface Session Continuity Test [x] [628149c]
 
 **TDD Cycle:**
 - RED: Write an integration test that: (1) creates a session via `session_create` MCP tool, (2) sends a message via `POST /api/agent/chat` with that sessionId, (3) verifies the agent chat loaded the session context, (4) makes an MCP tool call with `_sessionId`, (5) verifies the tool call is logged in the session, (6) sends another agent chat message and verifies the tool call is visible in history.
@@ -773,7 +773,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 **Goal:** Automatically enrich session context based on agent activity. When tools modify pages, create jobs, or trigger approvals, the session context is updated automatically.
 
-### Task 6.1: Implement Auto-Context Event Handlers
+### Task 6.1: Implement Auto-Context Event Handlers [x] [a1773ec]
 
 **TDD Cycle:**
 - RED: Write tests for `autoEnrichContext(sessionStore, sessionId, event)` that updates session context based on different event types.
@@ -801,7 +801,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 6.2: Hook Auto-Context into Agent Chat Tool Execution
+### Task 6.2: Hook Auto-Context into Agent Chat Tool Execution [x] [a1773ec]
 
 **TDD Cycle:**
 - RED: Write tests verifying that when the agent chat executes a tool that modifies a page (e.g., `page_create`, `block_append`), the session's relevant_pages is updated.
@@ -830,7 +830,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 6.3: Hook Auto-Context into MCP Tool Execution
+### Task 6.3: Hook Auto-Context into MCP Tool Execution [x] [a1773ec]
 
 **TDD Cycle:**
 - RED: Write tests verifying that MCP tool calls with a session ID trigger auto-context enrichment.
@@ -851,7 +851,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 6.4: Implement History Summarization
+### Task 6.4: Implement History Summarization [x] [9c4bf15]
 
 **TDD Cycle:**
 - RED: Write tests for `summarizeOldMessages(messages, config)` that takes an array of old messages and produces a summary string via an LLM call.
@@ -875,7 +875,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
 ---
 
-### Task 6.5: Integrate History Summarization into Agent Chat
+### Task 6.5: Integrate History Summarization into Agent Chat [x] [a1773ec]
 
 **TDD Cycle:**
 - RED: Write tests verifying that agent chat with a long session (>50 messages) uses summarization.
