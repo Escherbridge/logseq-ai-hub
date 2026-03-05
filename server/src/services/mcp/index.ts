@@ -9,6 +9,8 @@ import { registerApprovalTools } from "./approval-tools";
 import { registerRegistryTools } from "./registry-tools";
 import { registerSessionTools } from "./session-tools";
 import { registerProjectTools } from "./project-tools";
+import { registerAdrTools } from "./adr-tools";
+import { registerLessonTools } from "./lesson-tools";
 import { registerResources } from "./resources";
 import { registerPrompts } from "./prompts";
 
@@ -30,10 +32,12 @@ export function registerAllMcpHandlers(
   // P4: Session management (7 tools)
   registerSessionTools(server, getContext);
 
-  // P5: Code repository integration (2 tools)
+  // P5: Code repository integration (2 project + 2 ADR + 2 lesson = 6 tools)
   registerProjectTools(server, getContext);
+  registerAdrTools(server, getContext);
+  registerLessonTools(server, getContext);
 
-  // P2: Resources (5 resources)
+  // P2: Resources (6 resources)
   registerResources(server, getContext);
   registerPrompts(server);
 }

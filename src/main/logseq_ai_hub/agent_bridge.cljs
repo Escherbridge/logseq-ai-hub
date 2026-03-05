@@ -8,6 +8,8 @@
             [logseq-ai-hub.memory :as memory]
             [logseq-ai-hub.registry.bridge :as registry-bridge]
             [logseq-ai-hub.code-repo.bridge :as code-repo-bridge]
+            [logseq-ai-hub.code-repo.adr :as adr]
+            [logseq-ai-hub.code-repo.lessons :as lessons]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -433,7 +435,13 @@
    "execute_skill"      registry-bridge/handle-execute-skill
    ;; Code repository operations (for MCP server)
    "project_list"       code-repo-bridge/handle-project-list
-   "project_get"        code-repo-bridge/handle-project-get})
+   "project_get"        code-repo-bridge/handle-project-get
+   ;; ADR operations (for MCP server)
+   "adr_list"           adr/handle-adr-list
+   "adr_create"         adr/handle-adr-create
+   ;; Lesson operations (for MCP server)
+   "lesson_store"       lessons/handle-lesson-store
+   "lesson_search"      lessons/handle-lesson-search})
 
 ;; =============================================================================
 ;; Event Dispatcher
