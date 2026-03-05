@@ -61,3 +61,58 @@ export function mergeSessionContext(
 
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Working Memory Helpers
+// ---------------------------------------------------------------------------
+
+const WORKING_MEMORY_CAP = 20;
+
+/**
+ * Add or update a key-value entry in the session's working memory.
+ * If the key already exists, its value and addedAt are updated.
+ * Evicts the oldest entry (by addedAt) when at the cap of 20.
+ * Returns a new SessionContext (does not mutate the original).
+ */
+export function addWorkingMemory(
+  ctx: SessionContext,
+  key: string,
+  value: string,
+  source: "manual" | "auto" = "manual"
+): SessionContext {
+  const entries = [...(ctx.working_memory ?? [])];
+  const now = new Date().toISOString();
+  const existingIdx = entries.findIndex((e) => e.key === key);
+
+  if (existingIdx !== -1) {
+    entries[existingIdx] = { key, value, addedAt: now, source };
+  } else {
+    // Evict oldest if at cap
+    if (entries.length >= WORKING_MEMORY_CAP) {
+      let oldestIdx = 0;
+      for (let i = 1; i < entries.length; i++) {
+        if (entries[i].addedAt < entries[oldestIdx].addedAt) {
+          oldestIdx = i;
+        }
+      }
+      entries.splice(oldestIdx, 1);
+    }
+    entries.push({ key, value, addedAt: now, source });
+  }
+
+  return { ...ctx, working_memory: entries };
+}
+
+/**
+ * Remove a key from the session's working memory.
+ * Returns the context unchanged if the key does not exist.
+ * Returns a new SessionContext (does not mutate the original).
+ */
+export function removeWorkingMemory(
+  ctx: SessionContext,
+  key: string
+): SessionContext {
+  if (!ctx.working_memory) return ctx;
+  const filtered = ctx.working_memory.filter((e) => e.key !== key);
+  return { ...ctx, working_memory: filtered };
+}
