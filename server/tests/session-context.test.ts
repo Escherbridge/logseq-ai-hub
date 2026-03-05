@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import type { Session, SessionContext, WorkingMemoryEntry } from "../src/types/session";
+import type { Session, SessionContext, SessionMessage, WorkingMemoryEntry } from "../src/types/session";
 import {
   mergeSessionContext,
   addWorkingMemory,
@@ -8,6 +8,7 @@ import {
   removeRelevantPage,
   buildSessionSystemPrompt,
   resolveRelevantPages,
+  summarizeMessages,
 } from "../src/services/session-context";
 import type { AgentBridge } from "../src/services/agent-bridge";
 
@@ -499,5 +500,135 @@ describe("resolveRelevantPages", () => {
     const result = await resolveRelevantPages(bridge, ["Page1"]);
     expect(result.size).toBe(1);
     expect(typeof result.get("Page1")).toBe("string");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// summarizeMessages
+// ---------------------------------------------------------------------------
+
+function makeSessionMessage(
+  id: number,
+  role: SessionMessage["role"],
+  content: string
+): SessionMessage {
+  return {
+    id,
+    session_id: "test-session",
+    role,
+    content,
+    tool_calls: null,
+    tool_call_id: null,
+    metadata: null,
+    created_at: `2025-01-01T00:00:0${id % 10}.000Z`,
+  };
+}
+
+describe("summarizeMessages", () => {
+  it("should return summary and original message count", async () => {
+    const messages: SessionMessage[] = Array.from({ length: 5 }, (_, i) =>
+      makeSessionMessage(i + 1, i % 2 === 0 ? "user" : "assistant", `Message ${i + 1}`)
+    );
+
+    const mockLlmCall = async (_msgs: any[], _model: string): Promise<string> => {
+      return "Summary of the conversation.";
+    };
+
+    const result = await summarizeMessages(messages, mockLlmCall);
+    expect(result.summary).toBe("Summary of the conversation.");
+    expect(result.originalMessageCount).toBe(5);
+  });
+
+  it("should format messages as readable text for the LLM", async () => {
+    const messages: SessionMessage[] = [
+      makeSessionMessage(1, "user", "Hello"),
+      makeSessionMessage(2, "assistant", "Hi there"),
+    ];
+
+    let capturedMessages: any[] = [];
+    const mockLlmCall = async (msgs: any[], _model: string): Promise<string> => {
+      capturedMessages = msgs;
+      return "Summary.";
+    };
+
+    await summarizeMessages(messages, mockLlmCall);
+    expect(capturedMessages.length).toBeGreaterThan(0);
+    const combinedContent = capturedMessages.map((m: any) => m.content).join(" ");
+    expect(combinedContent).toContain("Hello");
+    expect(combinedContent).toContain("Hi there");
+  });
+
+  it("should use the provided model (haiku)", async () => {
+    const messages: SessionMessage[] = [
+      makeSessionMessage(1, "user", "Test"),
+    ];
+
+    let capturedModel = "";
+    const mockLlmCall = async (_msgs: any[], model: string): Promise<string> => {
+      capturedModel = model;
+      return "Summary.";
+    };
+
+    await summarizeMessages(messages, mockLlmCall, "anthropic/claude-haiku-4-5-20251001");
+    expect(capturedModel).toBe("anthropic/claude-haiku-4-5-20251001");
+  });
+
+  it("should use default haiku model when none specified", async () => {
+    const messages: SessionMessage[] = [
+      makeSessionMessage(1, "user", "Test"),
+    ];
+
+    let capturedModel = "";
+    const mockLlmCall = async (_msgs: any[], model: string): Promise<string> => {
+      capturedModel = model;
+      return "Summary.";
+    };
+
+    await summarizeMessages(messages, mockLlmCall);
+    expect(capturedModel).toContain("haiku");
+  });
+
+  it("should handle empty message list", async () => {
+    const mockLlmCall = async (_msgs: any[], _model: string): Promise<string> => {
+      return "No messages.";
+    };
+
+    const result = await summarizeMessages([], mockLlmCall);
+    expect(result.originalMessageCount).toBe(0);
+    expect(result.summary).toBe("No messages.");
+  });
+
+  it("should skip system messages when formatting for LLM", async () => {
+    const messages: SessionMessage[] = [
+      makeSessionMessage(1, "system", "System prompt"),
+      makeSessionMessage(2, "user", "User question"),
+      makeSessionMessage(3, "assistant", "Assistant answer"),
+    ];
+
+    let capturedMessages: any[] = [];
+    const mockLlmCall = async (msgs: any[], _model: string): Promise<string> => {
+      capturedMessages = msgs;
+      return "Summary.";
+    };
+
+    await summarizeMessages(messages, mockLlmCall);
+    const userMsg = capturedMessages.find((m: any) => m.role === "user");
+    expect(userMsg).toBeDefined();
+    // System prompt content should not appear in the transcript
+    expect(userMsg.content).not.toContain("System prompt");
+    expect(userMsg.content).toContain("User question");
+  });
+
+  it("should return originalMessageCount equal to input length", async () => {
+    const messages: SessionMessage[] = Array.from({ length: 30 }, (_, i) =>
+      makeSessionMessage(i + 1, i % 2 === 0 ? "user" : "assistant", `Turn ${i + 1}`)
+    );
+
+    const mockLlmCall = async (_msgs: any[], _model: string): Promise<string> => {
+      return "Summarized 30 messages.";
+    };
+
+    const result = await summarizeMessages(messages, mockLlmCall);
+    expect(result.originalMessageCount).toBe(30);
   });
 });

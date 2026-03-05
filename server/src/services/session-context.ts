@@ -1,6 +1,7 @@
 import type {
   Session,
   SessionContext,
+  SessionMessage,
   WorkingMemoryEntry,
 } from "../types/session";
 import { buildSystemPrompt } from "./agent";
@@ -293,4 +294,54 @@ export async function resolveRelevantPages(
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Message Summarization
+// ---------------------------------------------------------------------------
+
+const DEFAULT_SUMMARIZATION_MODEL = "anthropic/claude-haiku-4-5-20251001";
+const SUMMARIZATION_PROMPT =
+  "Summarize the following conversation history in 2-3 paragraphs, preserving key decisions, actions taken, and important context.";
+
+export type LlmCallFn = (
+  messages: Array<{ role: string; content: string }>,
+  model: string
+) => Promise<string>;
+
+export interface SummarizeResult {
+  summary: string;
+  originalMessageCount: number;
+}
+
+/**
+ * Summarize a batch of old session messages using a cheaper LLM model.
+ * Formats non-system messages as a readable transcript and asks the LLM
+ * to produce a 2-3 paragraph summary of key decisions and context.
+ * Returns the summary string and the original message count.
+ */
+export async function summarizeMessages(
+  messages: SessionMessage[],
+  llmCall: LlmCallFn,
+  model: string = DEFAULT_SUMMARIZATION_MODEL
+): Promise<SummarizeResult> {
+  const originalMessageCount = messages.length;
+
+  // Format non-system messages as a readable transcript
+  const transcript = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+    .join("\n");
+
+  const llmMessages: Array<{ role: string; content: string }> = [
+    { role: "system", content: SUMMARIZATION_PROMPT },
+    {
+      role: "user",
+      content: transcript || "(no conversation to summarize)",
+    },
+  ];
+
+  const summary = await llmCall(llmMessages, model);
+
+  return { summary, originalMessageCount };
 }
