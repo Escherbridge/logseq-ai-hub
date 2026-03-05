@@ -10,6 +10,7 @@ export interface Config {
   llmEndpoint: string;
   agentModel: string;
   agentRequestTimeout: number;
+  sessionMessageLimit: number;
 }
 
 export function loadConfig(): Config {
@@ -25,6 +26,7 @@ export function loadConfig(): Config {
     llmEndpoint: process.env.LLM_ENDPOINT || "https://openrouter.ai/api/v1",
     agentModel: process.env.AGENT_MODEL || "anthropic/claude-sonnet-4",
     agentRequestTimeout: parseInt(process.env.AGENT_REQUEST_TIMEOUT || "30000", 10),
+    sessionMessageLimit: parseInt(process.env.SESSION_MESSAGE_LIMIT || "50", 10),
   };
 }
 
