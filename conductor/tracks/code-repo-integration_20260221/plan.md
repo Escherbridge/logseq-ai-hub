@@ -128,7 +128,7 @@ ADR pages linked to projects and lesson-learned memory integration. Builds on Ph
 
 Layered human-in-the-loop safeguard system for agent operations. P0 priority — critical for safe agent execution.
 
-### Task 3.1: Plugin — Safeguard policy page scanner and parser [ ]
+### Task 3.1: Plugin — Safeguard policy page scanner and parser [x] [349cc3f]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/safeguard.cljs`, `src/test/logseq_ai_hub/code_repo/safeguard_test.cljs`
 
@@ -138,7 +138,7 @@ Layered human-in-the-loop safeguard system for agent operations. P0 priority —
 - Store in registry atom under `:safeguards` category
 - Write tests
 
-### Task 3.2: Plugin — Safeguard bridge handlers [ ]
+### Task 3.2: Plugin — Safeguard bridge handlers [x] [349cc3f]
 
 **Files:** `src/main/logseq_ai_hub/code_repo/bridge.cljs` (extend)
 
@@ -147,7 +147,7 @@ Layered human-in-the-loop safeguard system for agent operations. P0 priority —
 - Register operations in `agent_bridge.cljs`
 - Write tests
 
-### Task 3.3: Server — SafeguardService [ ]
+### Task 3.3: Server — SafeguardService [x] [2b00f37]
 
 **Files:** `server/src/services/safeguard-service.ts`, `server/tests/safeguard-service.test.ts`
 
@@ -164,7 +164,7 @@ Layered human-in-the-loop safeguard system for agent operations. P0 priority —
 - In-memory cache for policies (invalidated on bridge refresh)
 - Tests: all levels, rule matching, escalation chains, timeout handling, audit logging
 
-### Task 3.4: Server — Safeguard MCP tools [ ]
+### Task 3.4: Server — Safeguard MCP tools [x] [c5e49ec]
 
 **Files:** `server/src/services/mcp/safeguard-tools.ts`, `server/tests/safeguard-tools.test.ts`
 
@@ -176,7 +176,7 @@ Layered human-in-the-loop safeguard system for agent operations. P0 priority —
 - Implement `safeguard_audit_log` tool — params: `{project, since?, operation?, agent?}` → bridge call to read audit log page, filter entries
 - Tests
 
-### Task 3.5: Server — Integrate SafeguardService into context [ ]
+### Task 3.5: Server — Integrate SafeguardService into context [x] [feb9e46]
 
 **Files:** `server/src/types/mcp.ts` (modify), `server/src/index.ts` (modify), `server/src/services/mcp/index.ts` (modify)
 
