@@ -32,6 +32,12 @@ import {
   handleDeleteCharacterSession,
 } from "./routes/api/character-sessions";
 import { handleEmitEvent, handleListEvents } from "./routes/api/hub-events";
+import {
+  handleListEventSubscriptions,
+  handleCreateEventSubscription,
+  handleGetEventSubscription,
+  handleDeleteEventSubscription,
+} from "./routes/api/event-subscriptions";
 import { handleMcpRequest, handleMcpDelete, handleMcpConfig } from "./routes/mcp-transport";
 import { handleListApprovals, handleResolveApproval, handleCancelApproval, handleAskApproval } from "./routes/api/approvals";
 import { matchRoute } from "./router/match";
@@ -296,12 +302,32 @@ export function createRouter(ctx: RouteContext) {
     {
       method: "POST",
       pattern: "/api/events",
-      handler: (req, ctx) => handleEmitEvent(req, ctx.config, ctx.db),
+      handler: (req, ctx) => handleEmitEvent(req, ctx.config, ctx.db, ctx.agentBridge, ctx.traceId),
     },
     {
       method: "GET",
       pattern: "/api/events",
       handler: (req, ctx) => handleListEvents(req, ctx.config, ctx.db),
+    },
+    {
+      method: "GET",
+      pattern: "/api/event-subscriptions",
+      handler: (req, ctx) => handleListEventSubscriptions(req, ctx.config, ctx.db),
+    },
+    {
+      method: "POST",
+      pattern: "/api/event-subscriptions",
+      handler: (req, ctx) => handleCreateEventSubscription(req, ctx.config, ctx.db),
+    },
+    {
+      method: "GET",
+      pattern: "/api/event-subscriptions/:id",
+      handler: (req, ctx, params) => handleGetEventSubscription(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "DELETE",
+      pattern: "/api/event-subscriptions/:id",
+      handler: (req, ctx, params) => handleDeleteEventSubscription(req, ctx.config, ctx.db, params),
     },
     // MCP Server Protocol (Streamable HTTP transport)
     {

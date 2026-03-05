@@ -81,5 +81,21 @@ export function initializeSchema(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_hub_events_type ON hub_events(event_type);
     CREATE INDEX IF NOT EXISTS idx_hub_events_character ON hub_events(character_id);
     CREATE INDEX IF NOT EXISTS idx_hub_events_created ON hub_events(created_at);
+
+    CREATE TABLE IF NOT EXISTS event_subscriptions (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      character_id TEXT,
+      job_skill TEXT NOT NULL,
+      job_name_prefix TEXT NOT NULL,
+      priority INTEGER NOT NULL DEFAULT 3,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_event_subscriptions_type ON event_subscriptions(event_type);
+    CREATE INDEX IF NOT EXISTS idx_event_subscriptions_character ON event_subscriptions(character_id);
+    CREATE INDEX IF NOT EXISTS idx_event_subscriptions_enabled ON event_subscriptions(enabled);
   `);
 }

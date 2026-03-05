@@ -1,14 +1,18 @@
 import type { Database } from "bun:sqlite";
 import type { Config } from "../../config";
+import type { AgentBridge } from "../../services/agent-bridge";
 import { authenticate, unauthorizedResponse } from "../../middleware/auth";
 import { successResponse, errorResponse } from "../../helpers/responses";
 import { createHubEvent, listHubEvents } from "../../db/hub-events";
 import { sseManager } from "../../services/sse";
+import { findMatchingSubscriptions } from "../../db/event-subscriptions";
 
 export async function handleEmitEvent(
   req: Request,
   config: Config,
-  db: Database
+  db: Database,
+  bridge?: AgentBridge,
+  traceId?: string
 ): Promise<Response> {
   if (!authenticate(req, config)) return unauthorizedResponse();
 
@@ -45,7 +49,45 @@ export async function handleEmitEvent(
     },
   });
 
-  return successResponse(event, 201);
+  let triggered: { subscriptionId: string; jobName: string; jobId: string; skill: string }[] = [];
+  if (bridge?.isPluginConnected()) {
+    const subs = findMatchingSubscriptions(db, event.event_type, event.character_id);
+    for (const sub of subs) {
+      const jobName = `${sub.job_name_prefix}-${event.id.slice(0, 8)}`;
+      try {
+        await bridge.sendRequest(
+          "create_job",
+          {
+            name: jobName,
+            type: "event-driven",
+            priority: sub.priority,
+            skill: sub.job_skill,
+            input: {
+              event: {
+                id: event.id,
+                type: event.event_type,
+                payload: event.payload,
+                characterId: event.character_id,
+                source: event.source,
+                createdAt: event.created_at,
+              },
+            },
+          },
+          traceId,
+        );
+        triggered.push({
+          subscriptionId: sub.id,
+          jobName,
+          jobId: `Jobs/${jobName}`,
+          skill: sub.job_skill,
+        });
+      } catch {
+        // ignore individual subscription failures
+      }
+    }
+  }
+
+  return successResponse({ event, triggeredJobs: triggered }, 201);
 }
 
 export function handleListEvents(
