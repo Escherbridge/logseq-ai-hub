@@ -11,6 +11,7 @@
             [logseq-ai-hub.llm.enriched :as enriched]
             [logseq-ai-hub.registry.init :as registry-init]
             [logseq-ai-hub.code-repo.init :as code-repo-init]
+            [logseq-ai-hub.event-hub.init :as event-hub-init]
             [clojure.string :as str]))
 
 (def settings-schema
@@ -123,7 +124,27 @@
     :type "number"
     :title "Pi.dev Max Concurrent Sessions"
     :description "Maximum number of concurrent pi.dev agent sessions."
-    :default 3}])
+    :default 3}
+   {:key "eventHubEnabled"
+    :type "boolean"
+    :title "Enable Event Hub"
+    :description "Enable the Event Hub system for event-driven automation."
+    :default true}
+   {:key "httpAllowlist"
+    :type "string"
+    :title "HTTP Allowlist"
+    :description "JSON array of domain patterns allowed for outbound HTTP requests (e.g. [\"api.example.com\", \"*.slack.com\"])."
+    :default "[]"}
+   {:key "eventRetentionDays"
+    :type "number"
+    :title "Event Retention Days"
+    :description "Number of days to retain events before auto-pruning."
+    :default 30}
+   {:key "eventGraphPersistence"
+    :type "boolean"
+    :title "Persist Events to Graph"
+    :description "Persist incoming events to Logseq graph pages under Events/."
+    :default true}])
 
 (defn migrate-settings!
   "Migrates old OpenAI-specific settings keys to new provider-agnostic names.
@@ -177,6 +198,7 @@
   (job-runner-init/init!)
   (registry-init/init!)
   (code-repo-init/init!)
+  (event-hub-init/init!)
   (agent-bridge/init!))
 
 (defn init []

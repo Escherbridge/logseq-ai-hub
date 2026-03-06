@@ -4,7 +4,8 @@
   (:require [clojure.string :as str]
             [logseq-ai-hub.registry.store :as store]
             [logseq-ai-hub.registry.parser :as parser]
-            [logseq-ai-hub.job-runner.parser :as block-parser]))
+            [logseq-ai-hub.job-runner.parser :as block-parser]
+            [logseq-ai-hub.event-hub.parser :as event-hub-parser]))
 
 ;; Tag conventions for each registry type
 (def registry-tags
@@ -148,4 +149,32 @@
                                  :agents (count (store/list-entries :agent))
                                  :procedures (count (store/list-entries :procedure))}]
                      (js/console.log "Registry:" (pr-str counts))
-                     counts)))))))
+                     counts))))
+        ;; Chain event subscription + webhook source scans AFTER existing refresh
+        (.then (fn [counts]
+                 (-> (js/Promise.all
+                       (clj->js
+                         [(scan-and-parse-type! "logseq-ai-hub-event-subscription"
+                                                event-hub-parser/parse-subscription-page)
+                          (scan-and-parse-type! "logseq-ai-hub-webhook-source"
+                                                event-hub-parser/parse-webhook-source-page)]))
+                     (.then (fn [results]
+                              (let [[subscriptions sources]
+                                    (js->clj results :keywordize-keys true)]
+                                ;; Clear and repopulate event hub categories
+                                (store/clear-category! :event-subscription)
+                                (store/clear-category! :webhook-source)
+
+                                (doseq [entry subscriptions]
+                                  (store/add-entry entry))
+
+                                (doseq [entry sources]
+                                  (store/add-entry entry))
+
+                                (let [hub-counts (assoc counts
+                                                   :event-subscriptions (count (store/list-entries :event-subscription))
+                                                   :webhook-sources (count (store/list-entries :webhook-source)))]
+                                  (when (or (pos? (:event-subscriptions hub-counts))
+                                            (pos? (:webhook-sources hub-counts)))
+                                    (js/console.log "EventHub:" (pr-str (select-keys hub-counts [:event-subscriptions :webhook-sources]))))
+                                  hub-counts))))))))))

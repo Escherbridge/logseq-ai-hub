@@ -11,6 +11,8 @@ export interface Config {
   agentModel: string;
   agentRequestTimeout: number;
   sessionMessageLimit: number;
+  eventRetentionDays: number;
+  httpAllowlist: string[];
 }
 
 export function loadConfig(): Config {
@@ -27,6 +29,15 @@ export function loadConfig(): Config {
     agentModel: process.env.AGENT_MODEL || "anthropic/claude-sonnet-4",
     agentRequestTimeout: parseInt(process.env.AGENT_REQUEST_TIMEOUT || "30000", 10),
     sessionMessageLimit: parseInt(process.env.SESSION_MESSAGE_LIMIT || "50", 10),
+    eventRetentionDays: parseInt(process.env.EVENT_RETENTION_DAYS || "30", 10),
+    httpAllowlist: (() => {
+      try {
+        const raw = process.env.HTTP_ALLOWLIST || "[]";
+        return JSON.parse(raw) as string[];
+      } catch {
+        return [] as string[];
+      }
+    })(),
   };
 }
 

@@ -395,4 +395,4 @@
                                                       :by-status track-by-status}
                                      :tasks          {:total     total-tasks
                                                       :by-status task-by-status}
-                                     :completion-pct completion-pct}))))))))))))
+                                     :completion-pct completion-pct})))))))))))

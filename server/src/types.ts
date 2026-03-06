@@ -23,8 +23,23 @@ export interface Message {
 }
 
 export interface SSEEvent {
-  type: "connected" | "new_message" | "message_sent" | "status_update" | "heartbeat" | "agent_request" | "agent_callback" | "job_created" | "job_started" | "job_completed" | "job_failed" | "job_cancelled" | "skill_created" | "approval_created" | "approval_resolved" | "approval_timeout";
+  type: "connected" | "new_message" | "message_sent" | "status_update" | "heartbeat" | "agent_request" | "agent_callback" | "job_created" | "job_started" | "job_completed" | "job_failed" | "job_cancelled" | "skill_created" | "approval_created" | "approval_resolved" | "approval_timeout" | "hub_event";
   data: Record<string, unknown>;
+}
+
+export interface HubEvent {
+  id: string;
+  type: string;
+  source: string;
+  timestamp: string;
+  data: Record<string, unknown>;
+  metadata?: {
+    trace_id?: string;
+    severity?: "info" | "warning" | "error" | "critical";
+    tags?: string[];
+    ttl?: number;
+    chain_depth?: number;
+  };
 }
 
 export interface MessageWithContact extends Message {

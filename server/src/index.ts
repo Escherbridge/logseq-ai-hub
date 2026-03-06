@@ -11,6 +11,7 @@ import { DynamicRegistry } from "./services/mcp/dynamic-registry";
 import { SafeguardService } from "./services/safeguard-service";
 import { WorkClaimStore } from "./services/work-store";
 import { PiDevManager } from "./services/pidev-manager";
+import { EventBus } from "./services/event-bus";
 
 const config = loadConfig();
 
@@ -25,6 +26,7 @@ const agentWarnings = validateAgentConfig(config);
 agentWarnings.forEach((w) => console.warn(`  Warning: ${w}`));
 
 const db = getDatabase(config.databasePath);
+const eventBus = new EventBus(db);
 const agentBridge = new AgentBridge(config.agentRequestTimeout);
 const sessionStore = new SessionStore(db);
 const approvalStore = new ApprovalStore();
@@ -51,13 +53,17 @@ const getContext = () => ({
   safeguardService,
   workStore,
   piDevManager,
+  eventBus,
 });
 registerAllMcpHandlers(mcpServer, getContext);
 dynamicRegistry = new DynamicRegistry(mcpServer, getContext);
 
-const router = createRouter({ config, db, agentBridge, sessionStore, approvalStore });
+const router = createRouter({ config, db, agentBridge, sessionStore, approvalStore, eventBus });
 
 sseManager.start();
+
+// Prune old events daily
+setInterval(() => eventBus.prune(config.eventRetentionDays), 24 * 60 * 60 * 1000);
 
 const server = Bun.serve({
   port: config.port,

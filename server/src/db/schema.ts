@@ -93,5 +93,17 @@ export function initializeSchema(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_session_messages_session ON session_messages(session_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+
+    CREATE TABLE IF NOT EXISTS events (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      source TEXT NOT NULL,
+      data TEXT NOT NULL,
+      metadata TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+    CREATE INDEX IF NOT EXISTS idx_events_source ON events(source);
+    CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
   `);
 }

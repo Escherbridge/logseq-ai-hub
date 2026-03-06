@@ -3,6 +3,8 @@
             [logseq-ai-hub.job-runner.graph :as graph]
             [logseq-ai-hub.agent :as agent]
             [logseq-ai-hub.util.errors :as errors]
+            [logseq-ai-hub.event-hub.http :as http]
+            [logseq-ai-hub.event-hub.emit :as emit]
             [clojure.string :as str]))
 
 ;; Dynamic vars to avoid circular dependencies
@@ -265,3 +267,5 @@
 (register-executor! :mcp-tool mcp-tool-executor)
 (register-executor! :mcp-resource mcp-resource-executor)
 (register-executor! :ask-human ask-human-executor)
+(register-executor! :http-request http/http-request-executor)
+(register-executor! :emit-event emit/emit-event-executor)
