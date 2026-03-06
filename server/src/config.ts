@@ -10,6 +10,9 @@ export interface Config {
   llmEndpoint: string;
   agentModel: string;
   agentRequestTimeout: number;
+  baseUrl?: string;
+  llmHttpReferer?: string;
+  llmTitle?: string;
 }
 
 export function loadConfig(): Config {
@@ -25,6 +28,9 @@ export function loadConfig(): Config {
     llmEndpoint: process.env.LLM_ENDPOINT || "https://openrouter.ai/api/v1",
     agentModel: process.env.AGENT_MODEL || "anthropic/claude-sonnet-4",
     agentRequestTimeout: parseInt(process.env.AGENT_REQUEST_TIMEOUT || "30000", 10),
+    baseUrl: process.env.BASE_URL || process.env.PUBLIC_BASE_URL || undefined,
+    llmHttpReferer: process.env.LLM_HTTP_REFERER || undefined,
+    llmTitle: process.env.LLM_TITLE || undefined,
   };
 }
 

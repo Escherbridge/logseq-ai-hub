@@ -74,7 +74,7 @@ export function createRouter(ctx: RouteContext) {
     {
       method: "GET",
       pattern: "/health",
-      handler: (req, ctx) => handleHealth(req, ctx.config, ctx.agentBridge, ctx.traceId),
+      handler: (req, ctx) => handleHealth(req, ctx.config, ctx.agentBridge, ctx.traceId, ctx.db),
     },
     {
       method: "GET",

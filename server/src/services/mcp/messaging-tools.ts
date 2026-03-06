@@ -17,7 +17,8 @@ export function registerMessagingTools(server: McpServer, getContext: () => McpT
       const ctx = getContext();
       try {
         // Use the existing send logic via internal fetch to our own API
-        const url = `http://localhost:${ctx.config.port}/api/send`;
+        const baseUrl = ctx.config.baseUrl || `http://localhost:${ctx.config.port}`;
+        const url = `${baseUrl}/api/send`;
         const response = await fetch(url, {
           method: "POST",
           headers: {
