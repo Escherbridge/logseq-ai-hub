@@ -7,6 +7,13 @@
             [logseq-ai-hub.secrets :as secrets]
             [logseq-ai-hub.memory :as memory]
             [logseq-ai-hub.registry.bridge :as registry-bridge]
+            [logseq-ai-hub.code-repo.bridge :as code-repo-bridge]
+            [logseq-ai-hub.code-repo.adr :as adr]
+            [logseq-ai-hub.code-repo.lessons :as lessons]
+            [logseq-ai-hub.code-repo.safeguard :as safeguard]
+            [logseq-ai-hub.code-repo.work :as work]
+            [logseq-ai-hub.code-repo.tasks :as tasks]
+            [logseq-ai-hub.code-repo.pi-agents :as pi-agents]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -429,7 +436,34 @@
    "registry_get"       registry-bridge/handle-registry-get
    "registry_search"    registry-bridge/handle-registry-search
    "registry_refresh"   registry-bridge/handle-registry-refresh
-   "execute_skill"      registry-bridge/handle-execute-skill})
+   "execute_skill"      registry-bridge/handle-execute-skill
+   ;; Code repository operations (for MCP server)
+   "project_list"       code-repo-bridge/handle-project-list
+   "project_get"        code-repo-bridge/handle-project-get
+   ;; ADR operations (for MCP server)
+   "adr_list"           adr/handle-adr-list
+   "adr_create"         adr/handle-adr-create
+   ;; Lesson operations (for MCP server)
+   "lesson_store"       lessons/handle-lesson-store
+   "lesson_search"      lessons/handle-lesson-search
+   ;; Safeguard operations (for MCP server)
+   "safeguard_policy_get"    safeguard/handle-safeguard-policy-get
+   "safeguard_audit_append"  safeguard/handle-safeguard-audit-append
+   ;; Work log operations (for MCP server)
+   "work_log"               work/handle-work-log
+   ;; Track/task operations (for MCP server)
+   "track_create"           tasks/handle-track-create
+   "track_list"             tasks/handle-track-list
+   "track_update"           tasks/handle-track-update
+   "task_add"               tasks/handle-task-add
+   "task_update"            tasks/handle-task-update
+   "task_list"              tasks/handle-task-list
+   "project_dashboard"      tasks/handle-project-dashboard
+   ;; Pi.dev agent profile operations (for MCP server)
+   "pi_agent_list"          pi-agents/handle-pi-agent-list
+   "pi_agent_get"           pi-agents/handle-pi-agent-get
+   "pi_agent_create"        pi-agents/handle-pi-agent-create
+   "pi_agent_update"        pi-agents/handle-pi-agent-update})
 
 ;; =============================================================================
 ;; Event Dispatcher

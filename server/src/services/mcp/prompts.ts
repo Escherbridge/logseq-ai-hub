@@ -86,4 +86,110 @@ Present the draft for review before sending.`,
       ],
     }),
   );
+
+  server.prompt(
+    "code_review",
+    "Perform a code review using project context, ADRs, and a diff",
+    {
+      project: z.string().describe("Project name for context lookup"),
+      diff: z.string().optional().describe("Git diff or code changes to review"),
+      focus: z.string().optional().describe("Specific focus areas for the review"),
+    },
+    async ({ project, diff, focus }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: `Perform a code review for project "${project}".
+
+${diff ? `## Changes to Review\n\`\`\`\n${diff}\n\`\`\`` : "Use graph_search to find recent changes or ask for the diff."}
+
+${focus ? `## Focus Areas\n${focus}` : ""}
+
+## Review Process
+1. Use project_get to understand the project's architecture and conventions
+2. Use adr_list to check for relevant Architecture Decision Records
+3. Use lesson_search to find past lessons learned for this project
+4. Evaluate the changes against:
+   - Architecture alignment (ADRs)
+   - Security best practices
+   - Test coverage expectations
+   - Code style and conventions
+   - Performance implications
+5. Use safeguard_check if the changes involve sensitive operations
+6. Provide structured feedback with severity levels (critical, warning, suggestion)`,
+          },
+        },
+      ],
+    }),
+  );
+
+  server.prompt(
+    "start_coding_session",
+    "Initialize a coding session with full project context",
+    {
+      project: z.string().describe("Project to work on"),
+      task: z.string().optional().describe("Specific task or feature to work on"),
+    },
+    async ({ project, task }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: `Starting a coding session for project "${project}"${task ? ` to work on: ${task}` : ""}.
+
+## Setup Steps
+1. Use project_get to load project configuration and architecture context
+2. Use adr_list to review recent Architecture Decision Records
+3. Use lesson_search to find relevant lessons learned${task ? ` related to "${task}"` : ""}
+4. Use work_list_claims to check for active work claims that might conflict
+5. Use track_list to see active tracks and their status
+6. Use safeguard_policy_get to understand the project's safeguard level
+
+## Then
+- Summarize the project context, active work, and any relevant lessons
+- If a task is specified, create a work claim for the files you'll be working on
+- Recommend an approach based on ADRs and lessons learned
+- Flag any safeguard policies that may require approvals`,
+          },
+        },
+      ],
+    }),
+  );
+
+  server.prompt(
+    "deployment_checklist",
+    "Generate a deployment checklist with safeguard verification",
+    {
+      project: z.string().describe("Project to deploy"),
+      environment: z.string().optional().describe("Target environment (staging, production)"),
+    },
+    async ({ project, environment }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: `Prepare a deployment checklist for project "${project}"${environment ? ` to ${environment}` : ""}.
+
+## Checklist Steps
+1. Use project_get to verify project status and configuration
+2. Use track_list to ensure all planned tracks are complete
+3. Use project_dashboard to check task completion percentages
+4. Use safeguard_check to verify deployment is allowed under current policy
+5. Use adr_list to check for deployment-related ADRs
+6. Use lesson_search with category "deployment" for past deployment lessons
+
+## Generate
+- A pre-deployment checklist with pass/fail items
+- Any required approvals (via safeguard_request if needed)
+- Post-deployment verification steps
+- Rollback procedure reference`,
+          },
+        },
+      ],
+    }),
+  );
 }

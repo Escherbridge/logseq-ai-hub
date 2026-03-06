@@ -55,14 +55,14 @@ function getRegisteredTools(server: McpServer): Record<string, any> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("registerResources", () => {
-  test("registers exactly 5 resources/templates in total", () => {
+  test("registers exactly 10 resources/templates in total", () => {
     const server = createServer();
     registerResources(server, () => ({ db: createTestDb(), config: testConfig }));
 
     const staticCount = Object.keys(getRegisteredResources(server)).length;
     const templateCount = Object.keys(getRegisteredResourceTemplates(server)).length;
 
-    expect(staticCount + templateCount).toBe(5);
+    expect(staticCount + templateCount).toBe(10);
   });
 
   test("registers logseq-page as a resource template (keyed by name)", () => {
@@ -115,11 +115,11 @@ describe("registerResources", () => {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("registerPrompts", () => {
-  test("registers exactly 4 prompts", () => {
+  test("registers exactly 7 prompts", () => {
     const server = createServer();
     registerPrompts(server);
     const prompts = getRegisteredPrompts(server);
-    expect(Object.keys(prompts).length).toBe(4);
+    expect(Object.keys(prompts).length).toBe(7);
   });
 
   test("registers summarize_page prompt", () => {
@@ -205,14 +205,14 @@ describe("registerAllMcpHandlers", () => {
     const templateResourceCount = Object.keys(getRegisteredResourceTemplates(server)).length;
     const promptCount = Object.keys(getRegisteredPrompts(server)).length;
 
-    // Tools: 7 graph + 10 job + 4 memory + 3 messaging + 1 approval + 4 registry + 7 session = 36
-    expect(toolCount).toBe(36);
+    // Tools: 7 graph + 10 job + 4 memory + 3 messaging + 1 approval + 4 registry + 7 session + 2 project + 2 adr + 2 lesson + 5 safeguard + 4 work + 7 task + 9 pidev = 67
+    expect(toolCount).toBe(67);
 
-    // Resources: 5 total (3 static + 2 templates)
-    expect(staticResourceCount + templateResourceCount).toBe(5);
+    // Resources: 10 total (3 static + 7 templates)
+    expect(staticResourceCount + templateResourceCount).toBe(10);
 
-    // Prompts: 4
-    expect(promptCount).toBe(4);
+    // Prompts: 7
+    expect(promptCount).toBe(7);
   });
 
   test("getMcpStatus reflects registered counts after registerAllMcpHandlers on the singleton", async () => {

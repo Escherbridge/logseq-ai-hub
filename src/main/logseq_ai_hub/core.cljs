@@ -10,6 +10,7 @@
             [logseq-ai-hub.settings-writer :as settings-writer]
             [logseq-ai-hub.llm.enriched :as enriched]
             [logseq-ai-hub.registry.init :as registry-init]
+            [logseq-ai-hub.code-repo.init :as code-repo-init]
             [clojure.string :as str]))
 
 (def settings-schema
@@ -97,7 +98,32 @@
     :type "string"
     :title "Secrets Vault"
     :description "JSON object of secret key-value pairs. Reference in configs with {{secret.KEY_NAME}}. Example: {\"OPENROUTER_KEY\": \"sk-...\", \"SLACK_TOKEN\": \"xoxb-...\"}. Values are visible in this field — do not share screenshots."
-    :default "{}"}])
+    :default "{}"}
+   {:key "piDevEnabled"
+    :type "boolean"
+    :title "Enable Pi.dev Agent Platform"
+    :description "Enable pi.dev agent integration for code-aware autonomous workflows (requires pi CLI installed)."
+    :default false}
+   {:key "piDevInstallPath"
+    :type "string"
+    :title "Pi.dev Install Path"
+    :description "Path to the pi CLI binary (e.g. /usr/local/bin/pi or C:\\Program Files\\pi\\pi.exe)."
+    :default ""}
+   {:key "piDevDefaultModel"
+    :type "string"
+    :title "Pi.dev Default Model"
+    :description "Default LLM model for pi.dev sessions."
+    :default "anthropic/claude-sonnet-4"}
+   {:key "piDevRpcPort"
+    :type "number"
+    :title "Pi.dev RPC Port"
+    :description "Port for pi.dev RPC communication (0 = auto-assign)."
+    :default 0}
+   {:key "piDevMaxConcurrentSessions"
+    :type "number"
+    :title "Pi.dev Max Concurrent Sessions"
+    :description "Maximum number of concurrent pi.dev agent sessions."
+    :default 3}])
 
 (defn migrate-settings!
   "Migrates old OpenAI-specific settings keys to new provider-agnostic names.
@@ -150,6 +176,7 @@
   (sub-agents/init!)
   (job-runner-init/init!)
   (registry-init/init!)
+  (code-repo-init/init!)
   (agent-bridge/init!))
 
 (defn init []
