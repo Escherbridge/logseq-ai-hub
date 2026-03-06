@@ -10,9 +10,9 @@ export interface Config {
   llmEndpoint: string;
   agentModel: string;
   agentRequestTimeout: number;
-  baseUrl?: string;
-  llmHttpReferer?: string;
-  llmTitle?: string;
+  sessionMessageLimit: number;
+  eventRetentionDays: number;
+  httpAllowlist: string[];
 }
 
 export function loadConfig(): Config {
@@ -28,9 +28,16 @@ export function loadConfig(): Config {
     llmEndpoint: process.env.LLM_ENDPOINT || "https://openrouter.ai/api/v1",
     agentModel: process.env.AGENT_MODEL || "anthropic/claude-sonnet-4",
     agentRequestTimeout: parseInt(process.env.AGENT_REQUEST_TIMEOUT || "30000", 10),
-    baseUrl: process.env.BASE_URL || process.env.PUBLIC_BASE_URL || undefined,
-    llmHttpReferer: process.env.LLM_HTTP_REFERER || undefined,
-    llmTitle: process.env.LLM_TITLE || undefined,
+    sessionMessageLimit: parseInt(process.env.SESSION_MESSAGE_LIMIT || "50", 10),
+    eventRetentionDays: parseInt(process.env.EVENT_RETENTION_DAYS || "30", 10),
+    httpAllowlist: (() => {
+      try {
+        const raw = process.env.HTTP_ALLOWLIST || "[]";
+        return JSON.parse(raw) as string[];
+      } catch {
+        return [] as string[];
+      }
+    })(),
   };
 }
 

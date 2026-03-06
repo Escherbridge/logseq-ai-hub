@@ -7,6 +7,14 @@ import { registerMessagingTools } from "./messaging-tools";
 import { registerCharacterTools } from "./character-tools";
 import { registerApprovalTools } from "./approval-tools";
 import { registerRegistryTools } from "./registry-tools";
+import { registerSessionTools } from "./session-tools";
+import { registerProjectTools } from "./project-tools";
+import { registerAdrTools } from "./adr-tools";
+import { registerLessonTools } from "./lesson-tools";
+import { registerSafeguardTools } from "./safeguard-tools";
+import { registerWorkTools } from "./work-tools";
+import { registerTaskTools } from "./task-tools";
+import { registerPiDevTools } from "./pidev-tools";
 import { registerResources } from "./resources";
 import { registerPrompts } from "./prompts";
 
@@ -25,7 +33,25 @@ export function registerAllMcpHandlers(
   // P1: Registry operations (4 tools)
   registerRegistryTools(server, getContext);
 
-  // P2: Resources (5 resources)
+  // P4: Session management (7 tools)
+  registerSessionTools(server, getContext);
+
+  // P5: Code repository integration (2 project + 2 ADR + 2 lesson = 6 tools)
+  registerProjectTools(server, getContext);
+  registerAdrTools(server, getContext);
+  registerLessonTools(server, getContext);
+
+  // P6: Safeguard pipeline (5 tools)
+  registerSafeguardTools(server, getContext);
+
+  // P7: Work coordination (4 tools) + Task management (7 tools)
+  registerWorkTools(server, getContext);
+  registerTaskTools(server, getContext);
+
+  // P8: Pi.dev agent platform (9 tools)
+  registerPiDevTools(server, getContext);
+
+  // P2: Resources (6 resources)
   registerResources(server, getContext);
   registerPrompts(server);
 }

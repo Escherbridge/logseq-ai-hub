@@ -3,11 +3,15 @@ import { getDatabase } from "./db/connection";
 import { createRouter } from "./router";
 import { sseManager } from "./services/sse";
 import { AgentBridge } from "./services/agent-bridge";
-import { ConversationStore } from "./services/conversations";
+import { SessionStore } from "./services/session-store";
 import { createMcpServer } from "./services/mcp-server";
 import { registerAllMcpHandlers } from "./services/mcp/index";
 import { ApprovalStore } from "./services/approval-store";
 import { DynamicRegistry } from "./services/mcp/dynamic-registry";
+import { SafeguardService } from "./services/safeguard-service";
+import { WorkClaimStore } from "./services/work-store";
+import { PiDevManager } from "./services/pidev-manager";
+import { EventBus } from "./services/event-bus";
 
 const config = loadConfig();
 
@@ -22,9 +26,19 @@ const agentWarnings = validateAgentConfig(config);
 agentWarnings.forEach((w) => console.warn(`  Warning: ${w}`));
 
 const db = getDatabase(config.databasePath);
+const eventBus = new EventBus(db);
 const agentBridge = new AgentBridge(config.agentRequestTimeout);
-const conversations = new ConversationStore();
+const sessionStore = new SessionStore(db);
 const approvalStore = new ApprovalStore();
+const safeguardService = new SafeguardService(agentBridge, approvalStore);
+const workStore = new WorkClaimStore();
+const piDevManager = new PiDevManager(agentBridge, {
+  enabled: false, // Disabled by default — users enable via plugin settings
+  installPath: "",
+  defaultModel: "anthropic/claude-sonnet-4",
+  rpcPort: 0,
+  maxConcurrentSessions: 3,
+});
 
 // Initialize MCP server and register all tools/resources/prompts
 const mcpServer = createMcpServer();
@@ -35,13 +49,21 @@ const getContext = () => ({
   config,
   approvalStore,
   dynamicRegistry,
+  sessionStore,
+  safeguardService,
+  workStore,
+  piDevManager,
+  eventBus,
 });
 registerAllMcpHandlers(mcpServer, getContext);
 dynamicRegistry = new DynamicRegistry(mcpServer, getContext);
 
-const router = createRouter({ config, db, agentBridge, conversations, approvalStore });
+const router = createRouter({ config, db, agentBridge, sessionStore, approvalStore, eventBus });
 
 sseManager.start();
+
+// Prune old events daily
+setInterval(() => eventBus.prune(config.eventRetentionDays), 24 * 60 * 60 * 1000);
 
 const server = Bun.serve({
   port: config.port,

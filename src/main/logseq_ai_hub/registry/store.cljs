@@ -9,6 +9,8 @@
          :procedures {}
          :agents {}
          :skills {}
+         :event-subscriptions {}
+         :webhook-sources {}
          :version 0
          :last-scan nil}))
 
@@ -21,6 +23,8 @@
            :procedures {}
            :agents {}
            :skills {}
+           :event-subscriptions {}
+           :webhook-sources {}
            :version 0
            :last-scan nil}))
 
@@ -33,6 +37,8 @@
     :procedure :procedures
     :agent :agents
     :skill :skills
+    :event-subscription :event-subscriptions
+    :webhook-source :webhook-sources
     (throw (js/Error. (str "Unknown entry type: " entry-type)))))
 
 (defn add-entry
@@ -69,7 +75,9 @@
        (vals (:prompts @registry))
        (vals (:procedures @registry))
        (vals (:agents @registry))
-       (vals (:skills @registry))))))
+       (vals (:skills @registry))
+       (vals (:event-subscriptions @registry))
+       (vals (:webhook-sources @registry))))))
 
 (defn search-entries
   "Searches entries by substring match on name or description.
@@ -95,6 +103,8 @@
      :procedures (vals (:procedures reg))
      :agents (vals (:agents reg))
      :skills (vals (:skills reg))
+     :event-subscriptions (vals (:event-subscriptions reg))
+     :webhook-sources (vals (:webhook-sources reg))
      :version (:version reg)
      :last-scan (:last-scan reg)}))
 

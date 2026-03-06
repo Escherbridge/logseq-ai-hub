@@ -1,14 +1,16 @@
 import type { Config } from "./config";
 import type { Database } from "bun:sqlite";
 import type { AgentBridge } from "./services/agent-bridge";
-import type { ConversationStore } from "./services/conversations";
+import type { SessionStore } from "./services/session-store";
 import type { ApprovalStore } from "./services/approval-store";
+import type { EventBus } from "./services/event-bus";
 import { handleHealth } from "./routes/health";
 import {
   handleWhatsAppVerify,
   handleWhatsAppWebhook,
 } from "./routes/webhooks/whatsapp";
 import { handleTelegramWebhook } from "./routes/webhooks/telegram";
+import { handleEventWebhook, handleEventWebhookVerify } from "./routes/webhooks/event-hub";
 import { handleSSE } from "./routes/events";
 import { handleSendMessage } from "./routes/api/send";
 import { handleGetMessages } from "./routes/api/messages";
@@ -40,14 +42,16 @@ import {
 } from "./routes/api/event-subscriptions";
 import { handleMcpRequest, handleMcpDelete, handleMcpConfig } from "./routes/mcp-transport";
 import { handleListApprovals, handleResolveApproval, handleCancelApproval, handleAskApproval } from "./routes/api/approvals";
+import { handlePublishEvent, handleQueryEvents } from "./routes/api/events";
 import { matchRoute } from "./router/match";
 
 export interface RouteContext {
   config: Config;
   db: Database;
   agentBridge?: AgentBridge;
-  conversations?: ConversationStore;
+  sessionStore?: SessionStore;
   approvalStore?: ApprovalStore;
+  eventBus?: EventBus;
   traceId?: string;
 }
 
@@ -90,6 +94,17 @@ export function createRouter(ctx: RouteContext) {
       method: "POST",
       pattern: "/webhook/telegram",
       handler: (req, ctx) => handleTelegramWebhook(req, ctx.config, ctx.db, ctx.approvalStore),
+    },
+    // Event Hub Webhooks
+    {
+      method: "POST",
+      pattern: "/webhook/event/:source",
+      handler: (req, ctx, params) => handleEventWebhook(req, ctx, params),
+    },
+    {
+      method: "GET",
+      pattern: "/webhook/event/:source",
+      handler: (req, ctx, params) => handleEventWebhookVerify(req, ctx, params),
     },
     {
       method: "GET",
@@ -238,15 +253,26 @@ export function createRouter(ctx: RouteContext) {
         return handleCancelApproval(req, ctx.config, ctx.approvalStore, params);
       },
     },
+    // Event Hub API
+    {
+      method: "POST",
+      pattern: "/api/events/publish",
+      handler: (req, ctx) => handlePublishEvent(req, ctx),
+    },
+    {
+      method: "GET",
+      pattern: "/api/events",
+      handler: (req, ctx) => handleQueryEvents(req, ctx),
+    },
     // Agent Chat API
     {
       method: "POST",
       pattern: "/api/agent/chat",
       handler: (req, ctx) => {
-        if (!ctx.conversations) {
+        if (!ctx.sessionStore) {
           return Response.json({ success: false, error: "Agent not initialized" }, { status: 503 });
         }
-        return handleAgentChat(req, ctx.config, ctx.agentBridge, ctx.conversations, ctx.traceId);
+        return handleAgentChat(req, ctx.config, ctx.agentBridge, ctx.sessionStore, ctx.traceId);
       },
     },
     // Characters API

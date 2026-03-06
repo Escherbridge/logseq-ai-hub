@@ -97,31 +97,33 @@
 ## Active Tracks
 
 ### agent-sessions_20260221 -- Claude Code Agent Session Management
-- **Status:** planned
+- **Status:** completed
 - **Branch:** `track/agent-sessions_20260221`
 - **Priority:** P1
 - **Estimated:** 15-20 hours
 - **Depends on:** mcp-server_20260221 (MCP tools), webhook-agent-api_20260219 (agent chat API)
 - **Spec:** [spec.md](tracks/agent-sessions_20260221/spec.md)
+- **Plan:** [plan.md](tracks/agent-sessions_20260221/plan.md)
 - **Description:** Persistent, context-rich agent sessions backed by SQLite. Replaces the in-memory 20-message conversation store with durable sessions that survive restarts, include working context (focus, relevant pages, working memory), automatic context injection (recent activity, relevant memories), session lifecycle tools, and session handoff between interfaces (agent chat ↔ MCP).
 
 ### code-repo-integration_20260221 -- Code Repository Integration
-- **Status:** planned
+- **Status:** completed
 - **Branch:** `track/code-repo-integration_20260221`
-- **Priority:** P2
-- **Estimated:** 10-15 hours
+- **Priority:** P1
+- **Estimated:** 20-30 hours
 - **Depends on:** mcp-server_20260221, kb-tool-registry_20260221, human-in-loop_20260221, dynamic-arg-parser_20260222 (`[[Page]]` refs replace explicit graph-query steps)
 - **Spec:** [spec.md](tracks/code-repo-integration_20260221/spec.md)
-- **Description:** Orchestration layer for code-aware workflows: project registry pages with architecture context, Architectural Decision Records (ADRs), code review skills enriched with knowledge base context, deployment procedures with approval gates, work coordination tools for multi-agent conflict prevention, and lesson-learned memory integration. Augments Claude Code's native capabilities with the Hub's knowledge, coordination, and human oversight.
+- **Description:** Orchestration layer for code-aware workflows with pi.dev agent integration. Includes: project registry pages with architecture context, ADRs, code review skills enriched with KB context, deployment procedures with approval gates, work coordination tools, lesson-learned memory, pi.dev agent platform integration (opt-in, user provides install path), conductor-style project/track/task management within the graph, per-track customizable pi.dev agent profiles, and a layered development safeguard pipeline (5 levels from unrestricted to locked) with escalation chains, audit logging, and override controls — all linking back to the Hub's HITL approval system.
 
-### iot-infra-hooks_20260221 -- IoT/Infrastructure Hooks
+### event-hub_20260303 -- Event Hub System
 - **Status:** planned
-- **Branch:** `track/iot-infra-hooks_20260221`
-- **Priority:** P2
-- **Estimated:** 12-18 hours
-- **Depends on:** mcp-server_20260221, human-in-loop_20260221, kb-tool-registry_20260221, secrets-manager_20260221 (secret interpolation for HTTP headers)
-- **Spec:** [spec.md](tracks/iot-infra-hooks_20260221/spec.md)
-- **Description:** Generic webhook ingestion for any service (Grafana, Home Assistant, GitHub Actions, etc.), outbound HTTP action step type for the job runner with `{{secret.KEY_NAME}}` interpolation for auth headers, infrastructure monitoring pages with health checks, and alert routing engine. Enables the Hub to serve as a lightweight IT operations dashboard and automation layer.
+- **Branch:** `track/event-hub_20260303`
+- **Priority:** P1 (upgraded from P2)
+- **Estimated:** 32-43 hours (6 phases)
+- **Depends on:** mcp-server_20260221, human-in-loop_20260221, kb-tool-registry_20260221, secrets-manager_20260221
+- **Spec:** [spec.md](tracks/event-hub_20260303/spec.md)
+- **Plan:** [event-hub-plan.md](../../.omc/drafts/event-hub-plan.md)
+- **Description:** Universal event hub — the central nervous system of Logseq AI Hub. Provides generic webhook ingestion (`POST /webhook/event/:source`), bidirectional event flow (server→plugin via SSE, plugin→server via `POST /api/events/publish`), internal event emission from all subsystems (job runner, registry, graph, MCP, approvals, messaging), event-driven automation triggers via page-defined subscriptions (`logseq-ai-hub-event-subscription`), outbound HTTP action step type (`:http-request`) with URL allowlist and `{{secret.KEY}}` interpolation, custom event emission from skills (`:emit-event` step), 7 MCP tools for event management, infrastructure service monitoring, JSONPath extraction for webhook payloads, alert routing, and slash commands. Replaces the narrow IoT/Infrastructure Hooks track.
 
 ## Dependency Graph
 
@@ -144,7 +146,7 @@ core-arch (done) ──▶ job-runner (done) ──▶ webhook-agent-api (done)
                           │         ╲          ╱
                           │          ╲        ╱
                           └──────▶ code-repo-integration (P2)
-                                   iot-infra-hooks (P2)
+                                   event-hub (P1)
 ```
 
 ## Implementation Order
@@ -157,4 +159,4 @@ core-arch (done) ──▶ job-runner (done) ──▶ webhook-agent-api (done)
 6. ~~**kb-tool-registry**~~ — Done. Dynamic registry with plugin-side store, scanner, parsers, bridge ops. Server-side registry query tools (4) + DynamicRegistry class for syncing tools/prompts/resources. Skills auto-wrapped as MCP tools. Debounced DB watcher. 29 total MCP tools.
 7. **agent-sessions** — Persistent, context-rich sessions. Uses `graph-context/resolve-page-refs` for session context enrichment.
 8. **code-repo-integration** — Orchestration layer for coding workflows. `[[Page]]` refs replace explicit graph-query steps in skills. Builds on #5, #6.
-9. **iot-infra-hooks** — Generic infrastructure integration. Runbook `[[Page]]` refs for alert context. Builds on #2, #5, #6.
+9. **event-hub** — Universal event hub: webhook ingestion, internal event emission, event-driven automation, outbound HTTP. Builds on #2, #5, #6.

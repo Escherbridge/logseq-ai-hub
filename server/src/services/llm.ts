@@ -1,5 +1,15 @@
 import type { Config } from "../config";
-import type { ConversationMessage } from "./conversations";
+
+/**
+ * Message shape accepted by chatCompletion.
+ * Compatible with both the old ConversationMessage and the new SessionMessage mapping.
+ */
+export interface ChatMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  toolCallId?: string;
+  toolCalls?: any[];
+}
 
 export interface LLMResponse {
   content: string | null;
@@ -15,7 +25,7 @@ export interface ToolCall {
 }
 
 export async function chatCompletion(
-  messages: ConversationMessage[],
+  messages: ChatMessage[],
   tools: any[] | undefined,
   config: Config,
   modelOverride?: string
