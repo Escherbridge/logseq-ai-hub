@@ -100,7 +100,8 @@ export function handleListEvents(
   const url = new URL(req.url);
   const eventType = url.searchParams.get("type") ?? undefined;
   const characterId = url.searchParams.get("characterId") ?? undefined;
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10)));
+  const rawLimit = parseInt(url.searchParams.get("limit") ?? "50", 10);
+  const limit = Math.min(config.listLimitMax, Math.max(1, Number.isNaN(rawLimit) ? 50 : rawLimit));
   const since = url.searchParams.get("since") ?? undefined;
 
   const events = listHubEvents(db, { eventType, characterId, limit, since });
