@@ -59,14 +59,14 @@ function getRegisteredTools(server: McpServer): Record<string, any> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("registerResources", () => {
-  test("registers exactly 10 resources/templates in total", () => {
+  test("registers exactly 13 resources/templates in total", () => {
     const server = createServer();
     registerResources(server, () => ({ db: createTestDb(), config: testConfig }));
 
     const staticCount = Object.keys(getRegisteredResources(server)).length;
     const templateCount = Object.keys(getRegisteredResourceTemplates(server)).length;
 
-    expect(staticCount + templateCount).toBe(10);
+    expect(staticCount + templateCount).toBe(13);
   });
 
   test("registers logseq-page as a resource template (keyed by name)", () => {
@@ -212,8 +212,8 @@ describe("registerAllMcpHandlers", () => {
     // Tools: graph, job, memory, messaging, approval, registry, session, project, adr, lesson, safeguard, work, task, pidev, character, event (6), character-session (3)
     expect(toolCount).toBe(76);
 
-    // Resources: 10 total (3 static + 7 templates)
-    expect(staticResourceCount + templateResourceCount).toBe(10);
+    // Resources: 13 total (4 static + 9 templates)
+    expect(staticResourceCount + templateResourceCount).toBe(13);
 
     // Prompts: 7
     expect(promptCount).toBe(7);
