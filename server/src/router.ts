@@ -28,6 +28,7 @@ import {
   handleDeleteCharacter,
 } from "./routes/api/characters";
 import { handleCharacterChat } from "./routes/api/character-chat";
+import { handleCharacterReact } from "./routes/api/character-react";
 import {
   handleListCharacterSessions,
   handleGetCharacterSession,
@@ -306,6 +307,12 @@ export function createRouter(ctx: RouteContext) {
       pattern: "/api/characters/:id/chat",
       handler: (req, ctx, params) =>
         handleCharacterChat(req, ctx.config, ctx.db, ctx.agentBridge, params, ctx.traceId),
+    },
+    {
+      method: "POST",
+      pattern: "/api/characters/:id/react",
+      handler: (req, ctx, params) =>
+        handleCharacterReact(req, ctx.config, ctx.db, ctx.agentBridge, params, ctx.traceId),
     },
     {
       method: "GET",

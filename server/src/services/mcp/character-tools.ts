@@ -9,6 +9,7 @@ import {
   updateCharacter,
   deleteCharacter,
 } from "../../db/characters";
+import { runCharacterTurn } from "../character-runtime";
 
 function resolve(ctx: McpToolContext, id: string) {
   return getCharacter(ctx.db, id) ?? getCharacterByName(ctx.db, id);
@@ -142,6 +143,47 @@ export function registerCharacterTools(server: McpServer, getContext: () => McpT
         return err(`Error: ${e.message}`);
       }
     },
+  );
+
+  server.tool(
+    "character_react_to_event",
+    "Have a character process and react to a hub event. Updates their session and state.",
+    {
+      id: z.string().describe("Character ID or name"),
+      eventType: z.string().describe("Event type string (e.g. 'npc.attacked', 'quest.completed')"),
+      payload: z.record(z.unknown()).optional().describe("Event payload object"),
+      source: z.string().optional().describe("Event source"),
+      sessionId: z.string().optional().describe("Existing session to continue; creates new if absent"),
+    },
+    async ({ id, eventType, payload, source, sessionId }) => {
+      const ctx = getContext();
+      if (!ctx.config.llmApiKey) return err("LLM API key not configured");
+      const character = resolve(ctx, id);
+      if (!character) return err(`Character "${id}" not found`);
+
+      const type = typeof eventType === "string" ? eventType.trim() : "";
+      if (!type) return err("Missing or empty eventType");
+
+      const sourceLine = source ? `\nSource: ${source}` : "";
+      const payloadText = payload ? JSON.stringify(payload, null, 2) : "(no payload)";
+      const message = `[Event: ${type}]${sourceLine}\n${payloadText}`;
+
+      try {
+        const result = await runCharacterTurn(
+          message,
+          character,
+          sessionId,
+          ctx.config,
+          ctx.db,
+          ctx.bridge,
+          ctx.traceId
+        );
+        return ok(result);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return err(`Error: ${msg}`);
+      }
+    }
   );
 
   server.tool(

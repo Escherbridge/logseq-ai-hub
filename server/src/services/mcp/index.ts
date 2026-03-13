@@ -28,6 +28,7 @@ export function registerAllMcpHandlers(
   registerJobTools(server, getContext);
   registerMemoryTools(server, getContext);
   registerMessagingTools(server, getContext);
+  registerCharacterTools(server, getContext);
   registerEventTools(server, getContext);
   registerCharacterSessionTools(server, getContext);
 
