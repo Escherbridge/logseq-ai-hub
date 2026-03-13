@@ -13,6 +13,7 @@ export interface Config {
   sessionMessageLimit: number;
   eventRetentionDays: number;
   httpAllowlist: string[];
+  webhookSecret: string;
 }
 
 export function loadConfig(): Config {
@@ -30,6 +31,7 @@ export function loadConfig(): Config {
     agentRequestTimeout: parseInt(process.env.AGENT_REQUEST_TIMEOUT || "30000", 10),
     sessionMessageLimit: parseInt(process.env.SESSION_MESSAGE_LIMIT || "50", 10),
     eventRetentionDays: parseInt(process.env.EVENT_RETENTION_DAYS || "30", 10),
+    webhookSecret: process.env.WEBHOOK_SECRET || "",
     httpAllowlist: (() => {
       try {
         const raw = process.env.HTTP_ALLOWLIST || "[]";

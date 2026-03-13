@@ -143,7 +143,7 @@ function rowToHubEvent(row: {
     type: row.type,
     source: row.source,
     timestamp: row.created_at,
-    data: JSON.parse(row.data),
-    ...(row.metadata ? { metadata: JSON.parse(row.metadata) } : {}),
+    data: (() => { try { return JSON.parse(row.data); } catch { return {}; } })(),
+    ...(row.metadata ? { metadata: (() => { try { return JSON.parse(row.metadata || "{}"); } catch { return {}; } })() } : {}),
   };
 }

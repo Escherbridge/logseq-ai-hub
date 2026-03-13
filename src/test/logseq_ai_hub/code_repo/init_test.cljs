@@ -9,7 +9,11 @@
   (set! js/logseq #js {})
   (set! js/logseq.DB #js {:datascriptQuery (fn [_q] (js/Promise.resolve #js []))
                            :onChanged (fn [_cb] nil)})
-  (set! js/logseq.Editor #js {:getPageBlocksTree (fn [_name] (js/Promise.resolve #js []))})
+  (set! js/logseq.Editor #js {:getPageBlocksTree (fn [_name] (js/Promise.resolve #js []))
+                               :registerSlashCommand (fn [_ _] nil)
+                               :createPage (fn [name _props _opts] (js/Promise.resolve #js {:name name}))
+                               :appendBlockInPage (fn [_page _content] (js/Promise.resolve #js {:uuid "mock-uuid"}))})
+  (set! js/logseq.UI #js {:showMsg (fn [& _] nil)})
   (set! js/logseq.settings #js {}))
 
 (use-fixtures :each {:before setup-mocks!})

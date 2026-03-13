@@ -15,10 +15,6 @@
   "Function to enqueue a job. (fn [job-id] -> Promise)"
   nil)
 
-(def ^:dynamic *read-skill-fn*
-  "Function to read a skill page. (fn [skill-id] -> Promise<skill-def>)"
-  nil)
-
 (def ^:dynamic *send-message-fn*
   "Function to send a message. (fn [platform recipient content] -> Promise)"
   nil)

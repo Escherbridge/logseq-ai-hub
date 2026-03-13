@@ -5,7 +5,8 @@
 
 ;; Mock transport factory
 (defn make-mock-transport
-  "Creates a mock transport that can simulate responses."
+  "Creates a mock transport that can simulate responses.
+   Notifications (messages without :id) are treated as fire-and-forget."
   [responses-atom]
   {:type :mock
    :send! (fn [message]
@@ -14,11 +15,15 @@
                (let [method (:method message)
                      id (:id message)
                      response (get @responses-atom method)]
-                 (if response
-                   (if (:error response)
-                     (reject (js/Error. (:error response)))
-                     (resolve (assoc response :id id)))
-                   (reject (js/Error. (str "No mock response for method: " method))))))))
+                 (cond
+                   ;; Notifications (no id) are fire-and-forget
+                   (nil? id) (resolve nil)
+                   ;; Known response
+                   response (if (:error response)
+                              (reject (js/Error. (:error response)))
+                              (resolve (assoc response :id id)))
+                   ;; Unknown method
+                   :else (reject (js/Error. (str "No mock response for method: " method))))))))
    :close! (fn [] nil)})
 
 (deftest connect-server-test

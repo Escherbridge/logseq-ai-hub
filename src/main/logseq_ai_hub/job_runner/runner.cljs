@@ -22,6 +22,27 @@
 (def ^:dynamic queue-queue-size nil)
 (def ^:dynamic queue-find-in-queue nil)
 
+;; Event emission (wired to publish/publish-to-server! during init)
+(def ^:dynamic *emit-event-fn* nil)
+
+;; ---------------------------------------------------------------------------
+;; Lifecycle Event Helper
+;; ---------------------------------------------------------------------------
+
+(defn- emit-lifecycle-event!
+  "Emits a lifecycle event if *emit-event-fn* is set.
+   Fire-and-forget: calls the publish fn but does not await the result.
+   event-type - string like \"job.created\", \"job.started\", etc.
+   job-id     - the job page ID
+   extra      - optional map merged into :data"
+  ([event-type job-id]
+   (emit-lifecycle-event! event-type job-id nil))
+  ([event-type job-id extra]
+   (when *emit-event-fn*
+     (*emit-event-fn* {:type event-type
+                       :source "system:job-runner"
+                       :data (merge {:job-id job-id} extra)}))))
+
 ;; ---------------------------------------------------------------------------
 ;; Runner State
 ;; ---------------------------------------------------------------------------
@@ -110,6 +131,8 @@
                                      (fn [q entry]
                                        (swap! (:items q) conj entry)))]
                    (enqueue-fn (:queue @runner-state) queue-entry)
+                   (emit-lifecycle-event! "job.created" job-id
+                                          {:priority (:priority queue-entry)})
                    (graph-update-job-status! job-id "queued")))))
       (.catch (fn [err]
                 (js/console.error "Failed to enqueue job:" err)
@@ -124,6 +147,7 @@
                                           (vec (remove #(= (:job-id %) id) items))))))]
     (remove-fn (:queue @runner-state) job-id)
     (swap! runner-state update :running disj job-id)
+    (emit-lifecycle-event! "job.cancelled" job-id)
     (graph-update-job-status! job-id "cancelled")))
 
 (defn pause-job!
@@ -177,6 +201,8 @@
                    (do
                      ;; Mark as running
                      (swap! runner-state update :running conj job-id)
+                     (emit-lifecycle-event! "job.started" job-id
+                                            {:skill (:job-skill job-def)})
                      (graph-update-job-status! job-id "running")
                      (graph-update-job-property! job-id "job-started-at" start-iso)
                      (graph-append-job-log! job-id "Job started")
@@ -199,6 +225,8 @@
                      (do
                        ;; Success
                        (swap! runner-state update :completed assoc job-id result)
+                       (emit-lifecycle-event! "job.completed" job-id
+                                              {:duration-ms (:duration-ms result)})
                        (graph-update-job-status! job-id "completed")
                        (graph-update-job-property! job-id "job-completed-at" completed-at)
                        (graph-update-job-property! job-id "job-result"
@@ -207,6 +235,9 @@
                      (do
                        ;; Failed
                        (swap! runner-state update :failed assoc job-id result)
+                       (emit-lifecycle-event! "job.failed" job-id
+                                              {:error (str (:error result))
+                                               :failed-step (:failed-step result)})
                        (graph-update-job-status! job-id "failed")
                        (graph-update-job-property! job-id "job-completed-at" completed-at)
                        (graph-update-job-property! job-id "job-error"
@@ -216,6 +247,8 @@
         (.catch (fn [err]
                   (js/console.error "Job execution error:" err)
                   (swap! runner-state update :failed assoc job-id {:error err})
+                  (emit-lifecycle-event! "job.failed" job-id
+                                         {:error (str err)})
                   (graph-update-job-status! job-id "failed")
                   (graph-update-job-property! job-id "job-error" (str err))
                   (graph-append-job-log! job-id (str "Job failed with error: " err))))

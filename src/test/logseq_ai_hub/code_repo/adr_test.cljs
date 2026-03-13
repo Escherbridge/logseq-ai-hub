@@ -178,10 +178,10 @@
     (set! (.-datascriptQuery (.-DB js/logseq))
           (fn [_q]
             (js/Promise.resolve
-              (clj->js [[{:block/name "adr/logseq-ai-hub/adr-001-use-sse"
-                          :block/original-name "ADR/logseq-ai-hub/ADR-001-Use-SSE"}]
-                         [{:block/name "adr/other-project/adr-001-other"
-                           :block/original-name "ADR/other-project/ADR-001-Other"}]]))))
+              (clj->js [[{"block/name" "adr/logseq-ai-hub/adr-001-use-sse"
+                           "block/original-name" "ADR/logseq-ai-hub/ADR-001-Use-SSE"}]
+                         [{"block/name" "adr/other-project/adr-001-other"
+                           "block/original-name" "ADR/other-project/ADR-001-Other"}]]))))
     ;; Mock getPageBlocksTree to return appropriate content per page
     (set! (.-getPageBlocksTree (.-Editor js/logseq))
           (fn [page-name]
@@ -224,10 +224,10 @@
     (set! (.-datascriptQuery (.-DB js/logseq))
           (fn [_q]
             (js/Promise.resolve
-              (clj->js [[{:block/name "adr/proj-a/adr-001"
-                          :block/original-name "ADR/proj-a/ADR-001"}]
-                         [{:block/name "adr/proj-b/adr-001"
-                           :block/original-name "ADR/proj-b/ADR-001"}]]))))
+              (clj->js [[{"block/name" "adr/proj-a/adr-001"
+                           "block/original-name" "ADR/proj-a/ADR-001"}]
+                         [{"block/name" "adr/proj-b/adr-001"
+                           "block/original-name" "ADR/proj-b/ADR-001"}]]))))
     (set! (.-getPageBlocksTree (.-Editor js/logseq))
           (fn [page-name]
             (let [proj (if (str/includes? page-name "proj-a") "proj-a" "proj-b")]
@@ -289,8 +289,8 @@
     (set! (.-datascriptQuery (.-DB js/logseq))
           (fn [_q]
             (js/Promise.resolve
-              (clj->js [[{:block/name "adr/my-project/adr-001-first"
-                          :block/original-name "ADR/my-project/ADR-001-First"}]]))))
+              (clj->js [[{"block/name" "adr/my-project/adr-001-first"
+                           "block/original-name" "ADR/my-project/ADR-001-First"}]]))))
     (set! (.-getPageBlocksTree (.-Editor js/logseq))
           (fn [_page-name]
             (js/Promise.resolve

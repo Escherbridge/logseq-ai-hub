@@ -91,6 +91,15 @@ describe("code-repo integration", () => {
     expect("pi_agent_list" in tools).toBe(true);
     expect("pi_agent_get" in tools).toBe(true);
     expect("pi_agent_update" in tools).toBe(true);
+
+    // Event tools (7)
+    expect("event_publish" in tools).toBe(true);
+    expect("event_query" in tools).toBe(true);
+    expect("event_subscribe" in tools).toBe(true);
+    expect("event_sources" in tools).toBe(true);
+    expect("event_recent" in tools).toBe(true);
+    expect("webhook_test" in tools).toBe(true);
+    expect("http_request" in tools).toBe(true);
   });
 
   test("work_claim and work_release lifecycle", async () => {

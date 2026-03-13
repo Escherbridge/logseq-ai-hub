@@ -18,6 +18,8 @@
     "test:compile": "npx shadow-cljs compile node-test",
     "test:run": "node out/test/node-tests.js",
     "test:server": "cd server && bun test",
-    "test:all": "npm run test && npm run test:server"
+    "test:all": "npm run test && npm run test:server",
+    "t": "npm test",
+    "ta": "npm run test:all"
   }
 }

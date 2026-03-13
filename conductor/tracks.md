@@ -94,8 +94,6 @@
 - **Plan:** [plan.md](tracks/kb-tool-registry_20260221/plan.md)
 - **Description:** Dynamic capability registry transforming Logseq pages into discoverable MCP tools, prompts, and resources. Plugin-side registry with atom-based store, tag-based scanner, parsers for tool/prompt/procedure pages, bridge operations for CRUD+search+refresh. Server-side registry query MCP tools (4 tools: `registry_list`, `registry_search`, `registry_get`, `registry_refresh`), `DynamicRegistry` class for syncing page-defined tools/prompts/resources into MCP. Skills auto-wrapped as MCP tools with `skill_` prefix. Debounced DB watcher for auto-discovery. 29 MCP tools total. New files: 8 plugin source + 8 plugin tests + 2 server source. 224 server tests, 32 pre-existing ClojureScript failures unchanged.
 
-## Active Tracks
-
 ### agent-sessions_20260221 -- Claude Code Agent Session Management
 - **Status:** completed
 - **Branch:** `track/agent-sessions_20260221`
@@ -116,14 +114,18 @@
 - **Description:** Orchestration layer for code-aware workflows with pi.dev agent integration. Includes: project registry pages with architecture context, ADRs, code review skills enriched with KB context, deployment procedures with approval gates, work coordination tools, lesson-learned memory, pi.dev agent platform integration (opt-in, user provides install path), conductor-style project/track/task management within the graph, per-track customizable pi.dev agent profiles, and a layered development safeguard pipeline (5 levels from unrestricted to locked) with escalation chains, audit logging, and override controls — all linking back to the Hub's HITL approval system.
 
 ### event-hub_20260303 -- Event Hub System
-- **Status:** planned
-- **Branch:** `track/event-hub_20260303`
+- **Status:** completed
+- **Branch:** `main`
 - **Priority:** P1 (upgraded from P2)
 - **Estimated:** 32-43 hours (6 phases)
 - **Depends on:** mcp-server_20260221, human-in-loop_20260221, kb-tool-registry_20260221, secrets-manager_20260221
 - **Spec:** [spec.md](tracks/event-hub_20260303/spec.md)
-- **Plan:** [event-hub-plan.md](../../.omc/drafts/event-hub-plan.md)
+- **Plan:** [plan.md](tracks/event-hub_20260303/plan.md)
 - **Description:** Universal event hub — the central nervous system of Logseq AI Hub. Provides generic webhook ingestion (`POST /webhook/event/:source`), bidirectional event flow (server→plugin via SSE, plugin→server via `POST /api/events/publish`), internal event emission from all subsystems (job runner, registry, graph, MCP, approvals, messaging), event-driven automation triggers via page-defined subscriptions (`logseq-ai-hub-event-subscription`), outbound HTTP action step type (`:http-request`) with URL allowlist and `{{secret.KEY}}` interpolation, custom event emission from skills (`:emit-event` step), 7 MCP tools for event management, infrastructure service monitoring, JSONPath extraction for webhook payloads, alert routing, and slash commands. Replaces the narrow IoT/Infrastructure Hooks track.
+
+## No Active Tracks
+
+All tracks completed.
 
 ## Dependency Graph
 
@@ -138,15 +140,15 @@ core-arch (done) ──▶ job-runner (done) ──▶ webhook-agent-api (done)
                           │                    │         ╲
                           │                    ▼          ╲
                           │          dynamic-arg-parser    agent-sessions
-                          │              (done)              (P1)
+                          │              (done)              (done)
                           │             ╱     │
                           │            ╱      │
                           │   human-in-loop  kb-tool-registry
                           │      (done)          (done)
                           │         ╲          ╱
                           │          ╲        ╱
-                          └──────▶ code-repo-integration (P2)
-                                   event-hub (P1)
+                          └──────▶ code-repo-integration (done)
+                                   event-hub (done)
 ```
 
 ## Implementation Order
@@ -157,6 +159,6 @@ core-arch (done) ──▶ job-runner (done) ──▶ webhook-agent-api (done)
 4. ~~**dynamic-arg-parser**~~ — Done. `[[MCP/...]]`, `[[AI-Memory/...]]`, `[[Page]]` refs in `/LLM` blocks. On-demand MCP, multi-turn tool calling, BFS page traversal, token budgets, universal `enriched/call`. Sub-agents support all ref types.
 5. ~~**human-in-loop**~~ — Done. Approval store, `ask_human` MCP tool, webhook correlation, REST API, SSE events, `:ask-human` executor. 98 new tests.
 6. ~~**kb-tool-registry**~~ — Done. Dynamic registry with plugin-side store, scanner, parsers, bridge ops. Server-side registry query tools (4) + DynamicRegistry class for syncing tools/prompts/resources. Skills auto-wrapped as MCP tools. Debounced DB watcher. 29 total MCP tools.
-7. **agent-sessions** — Persistent, context-rich sessions. Uses `graph-context/resolve-page-refs` for session context enrichment.
-8. **code-repo-integration** — Orchestration layer for coding workflows. `[[Page]]` refs replace explicit graph-query steps in skills. Builds on #5, #6.
-9. **event-hub** — Universal event hub: webhook ingestion, internal event emission, event-driven automation, outbound HTTP. Builds on #2, #5, #6.
+7. ~~**agent-sessions**~~ — Done. Persistent, context-rich sessions. Uses `graph-context/resolve-page-refs` for session context enrichment.
+8. ~~**code-repo-integration**~~ — Done. Orchestration layer for coding workflows. `[[Page]]` refs replace explicit graph-query steps in skills. Builds on #5, #6.
+9. ~~**event-hub**~~ — Done. Universal event hub: webhook ingestion, internal event emission, event-driven automation, outbound HTTP, graph watcher, alert routing. 12 plugin source files, 13 plugin tests, 5 server source files, 5 server tests. 741 server tests passing.

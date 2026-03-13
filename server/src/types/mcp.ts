@@ -7,6 +7,7 @@ import type { SessionStore } from "../services/session-store";
 import type { SafeguardService } from "../services/safeguard-service";
 import type { WorkClaimStore } from "../services/work-store";
 import type { PiDevManager } from "../services/pidev-manager";
+import type { EventBus } from "../services/event-bus";
 
 /**
  * Context passed to MCP tool handlers so they can interact
@@ -23,6 +24,7 @@ export interface McpToolContext {
   safeguardService?: SafeguardService;
   workStore?: WorkClaimStore;
   piDevManager?: PiDevManager;
+  eventBus?: EventBus;
 }
 
 /**
