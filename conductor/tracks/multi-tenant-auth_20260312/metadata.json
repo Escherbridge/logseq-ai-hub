@@ -1,0 +1,7 @@
+{
+  "id": "multi-tenant-auth_20260312",
+  "description": "JWT-based authentication and tenant management for the proprietary multi-tenant server. jose JWT, Argon2id passwords, tenant CRUD, API key management, auth middleware, admin auth, rate limiting.",
+  "type": "feature",
+  "created_at": "2026-03-12T00:00:00.000Z",
+  "status": "pending"
+}

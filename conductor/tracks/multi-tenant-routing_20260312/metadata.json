@@ -1,0 +1,7 @@
+{
+  "id": "multi-tenant-routing_20260312",
+  "description": "Tenant-aware request routing for the proprietary multi-tenant server. Tenant context middleware, tenant-scoped SSE/Bridge/MCP/EventBus, route handler propagation, backward compatibility.",
+  "type": "feature",
+  "created_at": "2026-03-12T00:00:00.000Z",
+  "status": "pending"
+}

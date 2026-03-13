@@ -123,32 +123,114 @@
 - **Plan:** [plan.md](tracks/event-hub_20260303/plan.md)
 - **Description:** Universal event hub — the central nervous system of Logseq AI Hub. Provides generic webhook ingestion (`POST /webhook/event/:source`), bidirectional event flow (server→plugin via SSE, plugin→server via `POST /api/events/publish`), internal event emission from all subsystems (job runner, registry, graph, MCP, approvals, messaging), event-driven automation triggers via page-defined subscriptions (`logseq-ai-hub-event-subscription`), outbound HTTP action step type (`:http-request`) with URL allowlist and `{{secret.KEY}}` interpolation, custom event emission from skills (`:emit-event` step), 7 MCP tools for event management, infrastructure service monitoring, JSONPath extraction for webhook payloads, alert routing, and slash commands. Replaces the narrow IoT/Infrastructure Hooks track.
 
-## No Active Tracks
+## Active Tracks
 
-All tracks completed.
+### open-source-prep_20260312 -- Open Source Release Preparation
+- **Status:** in-progress
+- **Type:** chore
+- **Branch:** `track/open-source-prep_20260312`
+- **Priority:** P0
+- **Estimated:** 10-16 hours (36 tasks across 6 phases)
+- **Depends on:** (none -- all feature tracks completed)
+- **Spec:** [spec.md](tracks/open-source-prep_20260312/spec.md)
+- **Plan:** [plan.md](tracks/open-source-prep_20260312/plan.md)
+- **Description:** Prepare repository for public open-source release. MIT LICENSE file, comprehensive README.md with architecture overview and setup guide, source code secret sanitization, server `.env.example`, full documentation of 52 bridge operations and 80+ MCP tools/10 resources/7 prompts, CONTRIBUTING.md with dev workflow, package.json and manifest.edn metadata cleanup, and GitHub Actions CI workflow for both CLJS and server tests.
+
+### plugin-dual-auth_20260312 -- Plugin Dual Authentication: Token and JWT Modes
+- **Status:** pending
+- **Type:** feature
+- **Branch:** `track/plugin-dual-auth_20260312`
+- **Priority:** P0
+- **Estimated:** 3-5 hours (16 tasks across 4 phases)
+- **Depends on:** event-hub_20260303 (latest plugin state with all auth touchpoints)
+- **Spec:** [spec.md](tracks/plugin-dual-auth_20260312/spec.md)
+- **Plan:** [plan.md](tracks/plugin-dual-auth_20260312/plan.md)
+- **Description:** Add dual authentication to the Logseq plugin: existing simple bearer token for the open-source single-tenant server and JWT-based authentication for the proprietary multi-tenant server. New `authMode` enum setting ("token" | "jwt"), new `jwtToken` setting, centralized `logseq-ai-hub.auth` namespace replacing scattered `get-api-token` calls across 4 modules (messaging, agent-bridge, event-hub/publish, event-hub/init). Silent settings migration for existing users. Plugin sends JWT as `Authorization: Bearer <jwt>` -- server extracts tenant from claims. No JWT issuance/refresh/validation on plugin side.
+
+### proprietary-server-bootstrap_20260312 -- Proprietary Server Bootstrap: Private Multi-Tenant Repository
+- **Status:** pending
+- **Branch:** N/A (work happens in a separate repository)
+- **Priority:** P0
+- **Estimated:** 8-14 hours (35 tasks across 6 phases)
+- **Depends on:** event-hub_20260303 (latest server state with 741 tests), open-source-prep_20260312 (repo must be clean before forking)
+- **Spec:** [spec.md](tracks/proprietary-server-bootstrap_20260312/spec.md)
+- **Plan:** [plan.md](tracks/proprietary-server-bootstrap_20260312/plan.md)
+- **Description:** Create a private GitHub repository for the proprietary multi-tenant server. Copies the current `server/` directory as the foundation, sets up independent package.json/tsconfig/bun workspace, adds Dockerfile and docker-compose for deployment, GitHub Actions CI, multi-tenant environment config scaffolding (MULTI_TENANT, JWT_SECRET, etc.), API contract documentation, and shared types documentation. The open-source plugin must work with both servers.
+
+### multi-tenant-schema_20260312 -- Multi-Tenant Schema: Foundational Data Isolation Layer
+- **Status:** pending
+- **Branch:** `track/multi-tenant-schema_20260312`
+- **Priority:** P0
+- **Estimated:** 20-30 hours (49 tasks across 6 phases)
+- **Depends on:** proprietary-server-bootstrap_20260312 (server repo established), event-hub_20260303 (all tables finalized)
+- **Spec:** [spec.md](tracks/multi-tenant-schema_20260312/spec.md)
+- **Plan:** [plan.md](tracks/multi-tenant-schema_20260312/plan.md)
+- **Description:** Add `tenant_id` column (TEXT NOT NULL) to all 8 database tables (contacts, messages, sse_events, characters, character_sessions, sessions, session_messages, events). Create composite indexes, migration system with backfill for existing data, TenantContext type flowing through request handlers, tenant-scoped DB query functions, `MULTI_TENANT` feature flag for backward compatibility, and comprehensive cross-tenant isolation tests. This work targets the proprietary server repo only.
+
+### multi-tenant-auth_20260312 -- Multi-Tenant Authentication: JWT Auth, Tenant Management, and Rate Limiting
+- **Status:** pending
+- **Type:** feature
+- **Branch:** `track/multi-tenant-auth_20260312`
+- **Priority:** P0
+- **Estimated:** 25-35 hours (69 tasks across 7 phases)
+- **Depends on:** proprietary-server-bootstrap_20260312 (server repo exists), multi-tenant-schema_20260312 (tenant_id columns, TenantContext, migration system)
+- **Spec:** [spec.md](tracks/multi-tenant-auth_20260312/spec.md)
+- **Plan:** [plan.md](tracks/multi-tenant-auth_20260312/plan.md)
+- **Description:** JWT-based authentication and tenant management for the proprietary multi-tenant server. Includes: JWT token generation/validation via `jose` library, password hashing with Bun's built-in Argon2id, tenant CRUD operations (register, login, refresh, profile, admin management), API key management per tenant (`esh_` prefixed keys), multi-strategy auth middleware (admin key, JWT, API key, legacy token), admin authentication via dual mechanism (JWT admin claim and ADMIN_API_KEY env var), in-memory sliding-window rate limiting per tenant, and full backward compatibility when MULTI_TENANT=false. Targets proprietary server repo only.
+
+### multi-tenant-routing_20260312 -- Multi-Tenant Routing: Tenant-Aware Request Routing
+- **Status:** pending
+- **Type:** feature
+- **Branch:** `track/multi-tenant-routing_20260312`
+- **Priority:** P0
+- **Estimated:** 18-28 hours (52 tasks across 6 phases)
+- **Depends on:** multi-tenant-schema_20260312 (DB functions accept tenantId), multi-tenant-auth_20260312 (JWT validated, claims available)
+- **Spec:** [spec.md](tracks/multi-tenant-routing_20260312/spec.md)
+- **Plan:** [plan.md](tracks/multi-tenant-routing_20260312/plan.md)
+- **Description:** Tenant-aware request routing for the proprietary multi-tenant server. Tenant context extraction middleware (reads tenantId from JWT claims), tenant context propagation through all route handlers, tenant-scoped SSE connections (SSEManager partitioned by tenant), tenant-scoped Agent Bridge (pendingRequests partitioned by tenant), tenant-scoped MCP sessions, tenant-scoped EventBus/SessionStore/ApprovalStore, backward compatibility (MULTI_TENANT=false uses "default" tenant). This work targets the proprietary server repo only.
 
 ## Dependency Graph
 
 ```
-core-arch (done) ──▶ job-runner (done) ──▶ webhook-agent-api (done)
-                          │                         │
-                          │                         ▼
-                          │              foundation-hardening (done)
-                          │                         │
-                          ▼                         ▼
-                   secrets-manager (done) ──▶ mcp-server (done)
-                          │                    │         ╲
-                          │                    ▼          ╲
-                          │          dynamic-arg-parser    agent-sessions
-                          │              (done)              (done)
-                          │             ╱     │
-                          │            ╱      │
-                          │   human-in-loop  kb-tool-registry
-                          │      (done)          (done)
-                          │         ╲          ╱
-                          │          ╲        ╱
-                          └──────▶ code-repo-integration (done)
+core-arch (done) ──> job-runner (done) ──> webhook-agent-api (done)
+                          |                         |
+                          |                         v
+                          |              foundation-hardening (done)
+                          |                         |
+                          v                         v
+                   secrets-manager (done) ──> mcp-server (done)
+                          |                    |         \
+                          |                    v          \
+                          |          dynamic-arg-parser    agent-sessions
+                          |              (done)              (done)
+                          |             /     |
+                          |            /      |
+                          |   human-in-loop  kb-tool-registry
+                          |      (done)          (done)
+                          |         \          /
+                          |          \        /
+                          └──────> code-repo-integration (done)
                                    event-hub (done)
+                                        |
+                                        v
+                              open-source-prep (active)
+                              plugin-dual-auth (pending)
+                                        |
+                                        v
+                              proprietary-server-bootstrap (pending)
+                                   [separate repo]
+                                        |
+                                        v
+                              multi-tenant-schema (pending)
+                                   [proprietary repo]
+                                        |
+                                        v
+                              multi-tenant-auth (pending)
+                                   [proprietary repo]
+                                        |
+                                        v
+                              multi-tenant-routing (pending)
+                                   [proprietary repo]
 ```
 
 ## Implementation Order
@@ -162,3 +244,9 @@ core-arch (done) ──▶ job-runner (done) ──▶ webhook-agent-api (done)
 7. ~~**agent-sessions**~~ — Done. Persistent, context-rich sessions. Uses `graph-context/resolve-page-refs` for session context enrichment.
 8. ~~**code-repo-integration**~~ — Done. Orchestration layer for coding workflows. `[[Page]]` refs replace explicit graph-query steps in skills. Builds on #5, #6.
 9. ~~**event-hub**~~ — Done. Universal event hub: webhook ingestion, internal event emission, event-driven automation, outbound HTTP, graph watcher, alert routing. 12 plugin source files, 13 plugin tests, 5 server source files, 5 server tests. 741 server tests passing.
+10. **open-source-prep** — In progress. License, README, sanitization, .env.example, API docs, CONTRIBUTING, CI.
+11. **plugin-dual-auth** — Pending. Centralized auth namespace, authMode/jwtToken settings, module migration, silent settings migration.
+12. **proprietary-server-bootstrap** — Pending. Private repo creation, Docker deployment, CI, multi-tenant config scaffolding, API contract docs.
+13. **multi-tenant-schema** — Pending. Migration system, tenant_id on all 8 tables, composite indexes, TenantContext, scoped queries, backward compat, isolation tests. Targets proprietary repo.
+14. **multi-tenant-auth** — Pending. JWT auth via jose, Argon2id passwords, tenant CRUD, API keys, multi-strategy auth middleware, admin dual-auth, sliding-window rate limiting. Targets proprietary repo.
+15. **multi-tenant-routing** — Pending. Tenant context middleware, tenant-scoped SSE/Bridge/MCP/EventBus/SessionStore/ApprovalStore, route handler propagation, cross-tenant integration tests. Targets proprietary repo.

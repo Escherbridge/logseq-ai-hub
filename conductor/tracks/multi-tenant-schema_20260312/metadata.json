@@ -1,0 +1,7 @@
+{
+  "id": "multi-tenant-schema_20260312",
+  "description": "Add tenant_id column to all 8 database tables, create migration system, TenantContext type, tenant-scoped DB query functions, MULTI_TENANT feature flag, cross-tenant isolation tests. Targets proprietary server repo.",
+  "type": "feature",
+  "created_at": "2026-03-12T00:00:00.000Z",
+  "status": "pending"
+}
