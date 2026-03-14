@@ -17,17 +17,17 @@ export function setRelationship(
 ): CharacterRelationship {
   const strength = data.strength ?? 0;
   const notes = data.notes ?? null;
-  db.run(
+  const query = db.query(
     `INSERT INTO character_relationships (from_id, to_id, type, strength, notes, updated_at)
      VALUES (?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(from_id, to_id) DO UPDATE SET
        type = excluded.type,
        strength = excluded.strength,
        notes = excluded.notes,
-       updated_at = datetime('now')`,
-    [fromId, toId, data.type, strength, notes]
+       updated_at = datetime('now')
+     RETURNING *`
   );
-  return getRelationship(db, fromId, toId)!;
+  return query.get(fromId, toId, data.type, strength, notes) as CharacterRelationship;
 }
 
 export function getRelationship(
