@@ -37,12 +37,13 @@
   (graph-watcher/stop!)
   (restore-console!)
 
-  ;; Mock logseq (including DB.onChanged for graph watcher)
+  ;; Mock logseq (including DB.onChanged for graph watcher, Editor for commands)
   (set! js/logseq
     #js {:settings #js {"eventHubEnabled" enabled?
                          "webhookServerUrl" "http://localhost:3000"
                          "pluginApiToken" "test-token"}
-         :DB #js {:onChanged (fn [_cb] nil)}})
+         :DB #js {:onChanged (fn [_cb] nil)}
+         :Editor #js {:registerSlashCommand (fn [_name _handler] nil)}})
 
   ;; Mock messaging state with a fake EventSource
   (let [fake-es #js {:addEventListener
@@ -134,7 +135,8 @@
     (graph-watcher/stop!)
     (set! js/logseq
       #js {:settings #js {"eventHubEnabled" true}
-           :DB #js {:onChanged (fn [_cb] nil)}})
+           :DB #js {:onChanged (fn [_cb] nil)}
+           :Editor #js {:registerSlashCommand (fn [_name _handler] nil)}})
     ;; Set messaging state with nil event-source
     (reset! messaging/state {:event-source nil
                               :server-url nil

@@ -125,7 +125,7 @@
                      (is (= 1 (count (:inserts @mock-state))))
                      (let [insert (first (:inserts @mock-state))]
                        (is (= "status-uuid" (:uuid insert)))
-                       (is (re-find #"Runner Status: running" (:content insert)))
+                       (is (re-find #"Runner Status: :running" (:content insert)))
                        (is (re-find #"Queued: 2" (:content insert)))
                        (is (re-find #"Running: 1" (:content insert))))
                      (done)))

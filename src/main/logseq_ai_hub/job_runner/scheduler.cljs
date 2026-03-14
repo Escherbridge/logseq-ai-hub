@@ -10,6 +10,7 @@
 (def ^:dynamic runner-enqueue-job! nil)
 (def ^:dynamic graph-read-job-page nil)
 (def ^:dynamic graph-scan-job-pages nil)
+(def ^:dynamic graph-create-page! nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Scheduler State
@@ -97,8 +98,10 @@
                                        :job-template template-job-id
                                        :job-created-at (.toISOString now-date)}
                          opts #js {:createFirstBlock false
-                                 :properties properties}]
-                     (-> (js/logseq.Editor.createPage instance-name properties opts)
+                                 :properties properties}
+                         create-fn (or graph-create-page!
+                                      #(js/logseq.Editor.createPage %1 %2 %3))]
+                     (-> (create-fn instance-name properties opts)
                          (.then (fn [_page]
                                   instance-name))))))))))
 
@@ -207,4 +210,5 @@
     (set! runner-enqueue-job! (:enqueue-job! runner)))
   (when-let [graph (:graph deps)]
     (set! graph-read-job-page (:read-job-page graph))
-    (set! graph-scan-job-pages (:scan-job-pages graph))))
+    (set! graph-scan-job-pages (:scan-job-pages graph))
+    (set! graph-create-page! (:create-page! graph))))

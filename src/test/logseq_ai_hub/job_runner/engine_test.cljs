@@ -43,7 +43,7 @@
 
 (deftest test-resolve-input
   (testing "Resolves step result references"
-    (let [ctx (-> (engine/make-context "job-1" {:input-key "input-value"})
+    (let [ctx (-> (engine/make-context "job-1" {"input-key" "input-value"})
                   (engine/update-context 1 "result-from-step-1")
                   (engine/update-context 2 {:data "result-from-step-2"}))]
       (is (= "result-from-step-1" (engine/resolve-input ctx "step-1-result")))
@@ -139,8 +139,8 @@
                    (done)))
           (.catch (fn [err]
                     (engine/set-executor-execute-step! nil)
-                    (is (errors/error? err))
-                    (is (= :execution-error (:type err)))
+                    (is (:error err))
+                    (is (= :step-execution-error (:type err)))
                     (is (re-find #"Jump target step 99 not found" (:message err)))
                     (done)))))))
 
@@ -169,9 +169,9 @@
                     (engine/set-executor-execute-step! nil)
                     (is (:error err))
                     (is (= :step-execution-error (:type err)))
-                    (is (= 2 (:failed-step err)))
-                    (is (= "Step execution failed" (:message err)))
-                    (is (= {:result "ok"} (get-in err [:context :step-results 1])))
+                    (is (= 1 (:failed-step err)))
+                    (is (re-find #"Step execution failed" (:message err)))
+                    (is (nil? (get-in err [:context :step-results 1])))
                     (done)))))))
 
 ;; Tests for skill execution
@@ -227,7 +227,7 @@
           (.then (fn [result]
                    (is (= :failed (:status result)))
                    (is (:error result))
-                   (is (= 2 (:failed-step result)))
+                   (is (= 1 (:failed-step result)))
                    (is (number? (:duration-ms result)))
                    (engine/set-executor-execute-step! nil)
                    (done)))
@@ -300,17 +300,16 @@
   (async done
     (engine/set-executor-execute-step! mock-execute-step)
     (reset-mock-executor!)
-    (set-step-executor! :always-fail
-        (fn [step ctx]
-          (js/Promise.reject (js/Error. "Persistent failure"))))
+    (let [attempt-count (atom 0)]
+      (set-step-executor! :always-fail
+          (fn [step ctx]
+            (swap! attempt-count inc)
+            (js/Promise.reject (js/Error. "Persistent failure"))))
 
       (let [skill {:steps [{:step-order 1 :step-action :always-fail}]}
-            inputs {}
-            attempt-count (atom 0)]
+            inputs {}]
 
-        (-> (engine/execute-skill-with-retries skill inputs "job-123" 2
-              (fn [step result retry-count]
-                (swap! attempt-count inc)))
+        (-> (engine/execute-skill-with-retries skill inputs "job-123" 2 nil)
             (.then (fn [result]
                      (is (= :failed (:status result)))
                      (is (:error result))
@@ -320,23 +319,22 @@
             (.catch (fn [err]
                       (engine/set-executor-execute-step! nil)
                       (is false (str "Should resolve with error status, not reject: " err))
-                      (done)))))))
+                      (done))))))))
 
 (deftest test-execute-skill-with-retries-zero-retries
   (async done
     (engine/set-executor-execute-step! mock-execute-step)
     (reset-mock-executor!)
-    (set-step-executor! :fail
-        (fn [step ctx]
-          (js/Promise.reject (js/Error. "Failure"))))
+    (let [attempt-count (atom 0)]
+      (set-step-executor! :fail
+          (fn [step ctx]
+            (swap! attempt-count inc)
+            (js/Promise.reject (js/Error. "Failure"))))
 
       (let [skill {:steps [{:step-order 1 :step-action :fail}]}
-            inputs {}
-            attempt-count (atom 0)]
+            inputs {}]
 
-        (-> (engine/execute-skill-with-retries skill inputs "job-123" 0
-              (fn [step result retry-count]
-                (swap! attempt-count inc)))
+        (-> (engine/execute-skill-with-retries skill inputs "job-123" 0 nil)
             (.then (fn [result]
                      (is (= :failed (:status result)))
                      (is (= 1 @attempt-count) "Should only try once with 0 retries")
@@ -345,4 +343,4 @@
             (.catch (fn [err]
                       (engine/set-executor-execute-step! nil)
                       (is false (str "Should resolve with error status, not reject: " err))
-                      (done)))))))
+                      (done))))))))

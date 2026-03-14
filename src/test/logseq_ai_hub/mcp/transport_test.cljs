@@ -3,6 +3,13 @@
             [logseq-ai-hub.mcp.transport :as transport]
             [logseq-ai-hub.mcp.protocol :as protocol]))
 
+;; Ensure EventSource exists in Node.js environment (it's a browser-only API)
+(when-not (exists? js/EventSource)
+  (set! js/EventSource
+        (fn [_url]
+          #js {:addEventListener (fn [_ _])
+               :close (fn [])})))
+
 ;; Mock helpers
 (defn mock-fetch-json-response
   "Creates a mock fetch response for JSON"
@@ -160,36 +167,38 @@
 
 (deftest sse-transport-connect-test
   (testing "SSE transport connect establishes EventSource"
-    (let [original-eventsource js/EventSource
-          created-sources (atom [])
-          mock-source (atom nil)
-          transport (transport/make-sse-transport "http://example.com/events" "token123")]
+    (async done
+      (let [original-eventsource js/EventSource
+            created-sources (atom [])
+            mock-source (atom nil)
+            transport (transport/make-sse-transport "http://example.com/events" "token123")]
 
-      (set! js/EventSource
-            (fn [url]
-              (let [source #js {:addEventListener
-                                (fn [event-type handler]
-                                  (when (= event-type "endpoint")
-                                    ;; Simulate endpoint event
-                                    (js/setTimeout
-                                     #(handler #js {:data "http://example.com/post"})
-                                     10)))
-                                :close (fn [])}]
-                (swap! created-sources conj {:url url})
-                (reset! mock-source source)
-                source)))
+        (set! js/EventSource
+              (fn [url]
+                (let [source #js {:addEventListener
+                                  (fn [event-type handler]
+                                    (when (= event-type "endpoint")
+                                      ;; Simulate endpoint event
+                                      (js/setTimeout
+                                       #(handler #js {:data "http://example.com/post"})
+                                       10)))
+                                  :close (fn [])}]
+                  (swap! created-sources conj {:url url})
+                  (reset! mock-source source)
+                  source)))
 
-      ((:connect! transport))
+        ((:connect! transport))
 
-      ;; Wait for async event
-      (js/setTimeout
-       (fn []
-         (is (= 1 (count @created-sources)))
-         (is (= "http://example.com/events" (:url (first @created-sources))))
-         (is (= "http://example.com/post" @(:post-url transport)))
-         (is (= @mock-source @(:event-source transport)))
-         (set! js/EventSource original-eventsource))
-       50))))
+        ;; Wait for async event
+        (js/setTimeout
+         (fn []
+           (is (= 1 (count @created-sources)))
+           (is (= "http://example.com/events" (:url (first @created-sources))))
+           (is (= "http://example.com/post" @(:post-url transport)))
+           (is (= @mock-source @(:event-source transport)))
+           (set! js/EventSource original-eventsource)
+           (done))
+         50)))))
 
 (deftest sse-transport-send-test
   (testing "SSE transport sends via POST and resolves on message event"
@@ -241,23 +250,25 @@
 
 (deftest sse-transport-close-test
   (testing "SSE transport close calls EventSource.close"
-    (let [original-eventsource js/EventSource
-          close-called (atom false)
-          transport (transport/make-sse-transport "http://example.com/events" nil)]
+    (async done
+      (let [original-eventsource js/EventSource
+            close-called (atom false)
+            transport (transport/make-sse-transport "http://example.com/events" nil)]
 
-      (set! js/EventSource
-            (fn [_]
-              #js {:addEventListener (fn [_ _])
-                   :close (fn [] (reset! close-called true))}))
+        (set! js/EventSource
+              (fn [_]
+                #js {:addEventListener (fn [_ _])
+                     :close (fn [] (reset! close-called true))}))
 
-      ((:connect! transport))
-      ((:close! transport))
+        ((:connect! transport))
+        ((:close! transport))
 
-      (js/setTimeout
-       (fn []
-         (is @close-called)
-         (set! js/EventSource original-eventsource))
-       10))))
+        (js/setTimeout
+         (fn []
+           (is @close-called)
+           (set! js/EventSource original-eventsource)
+           (done))
+         10)))))
 
 (deftest make-transport-auto-detect-test
   (testing "make-transport defaults to streamable-http"
@@ -265,14 +276,14 @@
       (is (= :streamable-http (:type transport)))))
 
   (testing "make-transport creates streamable-http when specified"
-    (let [transport (transport/make-transport {:transport :streamable-http
+    (let [transport (transport/make-transport {:transport-type :streamable-http
                                                :url "http://example.com"
                                                :auth-token "token"})]
       (is (= :streamable-http (:type transport)))
       (is (= "http://example.com" (:url transport)))))
 
   (testing "make-transport creates SSE when specified"
-    (let [transport (transport/make-transport {:transport :sse
+    (let [transport (transport/make-transport {:transport-type :sse
                                                :url "http://example.com/events"
                                                :auth-token "token"})]
       (is (= :sse (:type transport)))

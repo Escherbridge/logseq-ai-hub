@@ -329,14 +329,18 @@
 
     (-> (runner/enqueue-job! "Jobs/Test Job")
         (.then (fn [_]
+                 ;; Runner must be :running for poll-tick! to dequeue
+                 (swap! runner/runner-state assoc :status :running)
                  ;; Simulate poll tick
                  (runner/poll-tick!)))
         (.then (fn [_]
-                 ;; Wait for async execution
+                 ;; Wait for async execution to settle
                  (js/setTimeout
                   (fn []
                     (is (pos? (count (:dequeue-calls @mock-queue-state))))
                     (is (= 0 (:queued (runner/runner-status))))
+                    ;; Clean up the polling timer scheduled by poll-tick!
+                    (runner/stop-runner!)
                     (done))
                   100)))
         (.catch (fn [err]

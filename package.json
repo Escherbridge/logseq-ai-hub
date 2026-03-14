@@ -1,15 +1,32 @@
 {
   "name": "logseq-ai-hub",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
+  "description": "Transform Logseq into a central orchestration layer for AI workflows, MCP tools, and automated task management",
   "main": "index.html",
   "author": "Ahmed Zaher (Jade Oni) with Claude Code Opus 4.6",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/escherbridge/logseq-ai-hub.git"
+  },
+  "homepage": "https://github.com/escherbridge/logseq-ai-hub",
+  "keywords": [
+    "logseq",
+    "logseq-plugin",
+    "ai",
+    "mcp",
+    "model-context-protocol",
+    "automation",
+    "knowledge-management",
+    "agent",
+    "clojurescript"
+  ],
   "devDependencies": {
     "shadow-cljs": "2.16.2"
   },
   "logseq": {
-    "id": "_byud67luv"
+    "id": "logseq-ai-hub"
   },
   "scripts": {
     "watch": "npx shadow-cljs watch app",

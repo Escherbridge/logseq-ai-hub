@@ -15,6 +15,8 @@ export interface Config {
   httpAllowlist: string[];
   listLimitMax: number;
   webhookSecret: string;
+  llmHttpReferer: string;
+  llmTitle: string;
 }
 
 export function loadConfig(): Config {
@@ -42,6 +44,8 @@ export function loadConfig(): Config {
       }
     })(),
     listLimitMax: Math.max(1, parseInt(process.env.LIST_LIMIT_MAX || "100", 10)),
+    llmHttpReferer: process.env.LLM_HTTP_REFERER || "",
+    llmTitle: process.env.LLM_TITLE || "",
   };
 }
 
