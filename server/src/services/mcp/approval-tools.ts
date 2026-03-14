@@ -131,7 +131,8 @@ export function registerApprovalTools(
         const messageContent = formatApprovalMessage(question, options, timeout);
 
         // Send the message via internal API
-        const sendUrl = `http://localhost:${ctx.config.port}/api/send`;
+        const baseUrl = ctx.config.baseUrl || `http://localhost:${ctx.config.port}`;
+        const sendUrl = `${baseUrl}/api/send`;
         const sendResponse = await fetch(sendUrl, {
           method: "POST",
           headers: {

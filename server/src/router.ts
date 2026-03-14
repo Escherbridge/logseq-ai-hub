@@ -28,6 +28,25 @@ import {
   handleDeleteCharacter,
 } from "./routes/api/characters";
 import { handleCharacterChat } from "./routes/api/character-chat";
+import { handleCharacterReact } from "./routes/api/character-react";
+import {
+  handleListRelationships,
+  handleSetRelationship,
+  handleGetRelationship,
+  handleDeleteRelationship,
+} from "./routes/api/character-relationships";
+import {
+  handleListCharacterSessions,
+  handleGetCharacterSession,
+  handleDeleteCharacterSession,
+} from "./routes/api/character-sessions";
+import { handleEmitEvent, handleListEvents } from "./routes/api/hub-events";
+import {
+  handleListEventSubscriptions,
+  handleCreateEventSubscription,
+  handleGetEventSubscription,
+  handleDeleteEventSubscription,
+} from "./routes/api/event-subscriptions";
 import { handleMcpRequest, handleMcpDelete, handleMcpConfig } from "./routes/mcp-transport";
 import { handleListApprovals, handleResolveApproval, handleCancelApproval, handleAskApproval } from "./routes/api/approvals";
 import { handlePublishEvent, handleQueryEvents } from "./routes/api/events";
@@ -66,7 +85,7 @@ export function createRouter(ctx: RouteContext) {
     {
       method: "GET",
       pattern: "/health",
-      handler: (req, ctx) => handleHealth(req, ctx.config, ctx.agentBridge, ctx.traceId),
+      handler: (req, ctx) => handleHealth(req, ctx.config, ctx.agentBridge, ctx.traceId, ctx.db),
     },
     {
       method: "GET",
@@ -294,6 +313,84 @@ export function createRouter(ctx: RouteContext) {
       pattern: "/api/characters/:id/chat",
       handler: (req, ctx, params) =>
         handleCharacterChat(req, ctx.config, ctx.db, ctx.agentBridge, params, ctx.traceId),
+    },
+    {
+      method: "POST",
+      pattern: "/api/characters/:id/react",
+      handler: (req, ctx, params) =>
+        handleCharacterReact(req, ctx.config, ctx.db, ctx.agentBridge, params, ctx.traceId),
+    },
+    {
+      method: "GET",
+      pattern: "/api/characters/:id/relationships",
+      handler: (req, ctx, params) =>
+        handleListRelationships(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "PUT",
+      pattern: "/api/characters/:id/relationships/:targetId",
+      handler: (req, ctx, params) =>
+        handleSetRelationship(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "GET",
+      pattern: "/api/characters/:id/relationships/:targetId",
+      handler: (req, ctx, params) =>
+        handleGetRelationship(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "DELETE",
+      pattern: "/api/characters/:id/relationships/:targetId",
+      handler: (req, ctx, params) =>
+        handleDeleteRelationship(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "GET",
+      pattern: "/api/characters/:id/sessions",
+      handler: (req, ctx, params) =>
+        handleListCharacterSessions(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "GET",
+      pattern: "/api/character-sessions/:id",
+      handler: (req, ctx, params) =>
+        handleGetCharacterSession(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "DELETE",
+      pattern: "/api/character-sessions/:id",
+      handler: (req, ctx, params) =>
+        handleDeleteCharacterSession(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "POST",
+      pattern: "/api/events",
+      handler: (req, ctx) => handleEmitEvent(req, ctx.config, ctx.db, ctx.agentBridge, ctx.traceId),
+    },
+    {
+      method: "GET",
+      pattern: "/api/events",
+      handler: (req, ctx) => handleListEvents(req, ctx.config, ctx.db),
+    },
+    {
+      method: "GET",
+      pattern: "/api/event-subscriptions",
+      handler: (req, ctx) => handleListEventSubscriptions(req, ctx.config, ctx.db),
+    },
+    {
+      method: "POST",
+      pattern: "/api/event-subscriptions",
+      handler: (req, ctx) => handleCreateEventSubscription(req, ctx.config, ctx.db),
+    },
+    {
+      method: "GET",
+      pattern: "/api/event-subscriptions/:id",
+      handler: (req, ctx, params) => handleGetEventSubscription(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "DELETE",
+      pattern: "/api/event-subscriptions/:id",
+      handler: (req, ctx, params) => handleDeleteEventSubscription(req, ctx.config, ctx.db, params),
     },
     // MCP Server Protocol (Streamable HTTP transport)
     {

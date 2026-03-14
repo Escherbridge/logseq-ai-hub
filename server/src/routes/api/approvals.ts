@@ -105,7 +105,8 @@ export async function handleAskApproval(
   // Send message via internal fetch
   let sendOk = false;
   try {
-    const sendRes = await fetch(`http://localhost:${config.port}/api/send`, {
+    const baseUrl = config.baseUrl || `http://localhost:${config.port}`;
+    const sendRes = await fetch(`${baseUrl}/api/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

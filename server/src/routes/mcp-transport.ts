@@ -95,7 +95,7 @@ export async function handleMcpDelete(
  * Returns the MCP server configuration snippet for Claude Code.
  */
 export function handleMcpConfig(_req: Request, config: Config): Response {
-  const serverUrl = `http://localhost:${config.port}`;
+  const serverUrl = config.baseUrl || `http://localhost:${config.port}`;
   return Response.json({
     mcpServers: {
       "logseq-ai-hub": {

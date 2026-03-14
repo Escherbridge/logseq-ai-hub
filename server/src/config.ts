@@ -13,6 +13,7 @@ export interface Config {
   sessionMessageLimit: number;
   eventRetentionDays: number;
   httpAllowlist: string[];
+  listLimitMax: number;
 }
 
 export function loadConfig(): Config {
@@ -38,6 +39,7 @@ export function loadConfig(): Config {
         return [] as string[];
       }
     })(),
+    listLimitMax: Math.max(1, parseInt(process.env.LIST_LIMIT_MAX || "100", 10)),
   };
 }
 

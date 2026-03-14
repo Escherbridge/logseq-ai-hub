@@ -18,6 +18,10 @@ const testConfig: Config = {
   llmEndpoint: "",
   agentModel: "",
   agentRequestTimeout: 30000,
+  sessionMessageLimit: 50,
+  eventRetentionDays: 30,
+  httpAllowlist: [],
+  listLimitMax: 100,
 };
 
 function createServer(): McpServer {
@@ -55,14 +59,14 @@ function getRegisteredTools(server: McpServer): Record<string, any> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("registerResources", () => {
-  test("registers exactly 10 resources/templates in total", () => {
+  test("registers exactly 13 resources/templates in total", () => {
     const server = createServer();
     registerResources(server, () => ({ db: createTestDb(), config: testConfig }));
 
     const staticCount = Object.keys(getRegisteredResources(server)).length;
     const templateCount = Object.keys(getRegisteredResourceTemplates(server)).length;
 
-    expect(staticCount + templateCount).toBe(10);
+    expect(staticCount + templateCount).toBe(13);
   });
 
   test("registers logseq-page as a resource template (keyed by name)", () => {
@@ -205,11 +209,11 @@ describe("registerAllMcpHandlers", () => {
     const templateResourceCount = Object.keys(getRegisteredResourceTemplates(server)).length;
     const promptCount = Object.keys(getRegisteredPrompts(server)).length;
 
-    // Tools: 7 graph + 10 job + 4 memory + 3 messaging + 1 approval + 4 registry + 7 session + 2 project + 2 adr + 2 lesson + 5 safeguard + 4 work + 7 task + 9 pidev = 67
-    expect(toolCount).toBe(67);
+    // Tools: graph, job, memory, messaging, character (12), event (6), character-session (3), approval, registry, session, project, adr, lesson, safeguard, work, task, pidev
+    expect(toolCount).toBe(88);
 
-    // Resources: 10 total (3 static + 7 templates)
-    expect(staticResourceCount + templateResourceCount).toBe(10);
+    // Resources: 13 total (4 static + 9 templates)
+    expect(staticResourceCount + templateResourceCount).toBe(13);
 
     // Prompts: 7
     expect(promptCount).toBe(7);

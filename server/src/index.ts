@@ -54,6 +54,7 @@ const getContext = () => ({
   workStore,
   piDevManager,
   eventBus,
+  sseManager,
 });
 registerAllMcpHandlers(mcpServer, getContext);
 dynamicRegistry = new DynamicRegistry(mcpServer, getContext);

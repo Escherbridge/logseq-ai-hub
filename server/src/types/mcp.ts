@@ -23,6 +23,7 @@ export interface McpToolContext {
   safeguardService?: SafeguardService;
   workStore?: WorkClaimStore;
   piDevManager?: PiDevManager;
+  sseManager?: { broadcast(event: { type: string; data: Record<string, unknown> }): void };
 }
 
 /**

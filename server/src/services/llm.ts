@@ -51,8 +51,8 @@ export async function chatCompletion(
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${config.llmApiKey}`,
-      "HTTP-Referer": "https://github.com/escherbridge/logseq-ai-hub",
-      "X-Title": "Logseq AI Hub Agent",
+      ...(config.llmHttpReferer ? { "HTTP-Referer": config.llmHttpReferer } : {}),
+      ...(config.llmTitle ? { "X-Title": config.llmTitle } : {}),
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30000),
