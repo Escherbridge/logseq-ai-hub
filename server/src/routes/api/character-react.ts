@@ -10,7 +10,17 @@ function resolveCharacter(db: Database, idOrName: string) {
   return getCharacter(db, idOrName) ?? getCharacterByName(db, idOrName);
 }
 
-export async function handleCharacterChat(
+function buildEventMessage(
+  eventType: string,
+  payload: Record<string, unknown> | undefined,
+  source: string | undefined
+): string {
+  const sourceLine = source ? `\nSource: ${source}` : "";
+  const payloadText = payload ? JSON.stringify(payload, null, 2) : "(no payload)";
+  return `[Event: ${eventType}]${sourceLine}\n${payloadText}`;
+}
+
+export async function handleCharacterReact(
   req: Request,
   config: Config,
   db: Database,
@@ -27,20 +37,27 @@ export async function handleCharacterChat(
   const character = resolveCharacter(db, params.id);
   if (!character) return notFoundResponse("Character not found");
 
-  let body: { message?: string; sessionId?: string };
+  let body: {
+    eventType?: string;
+    payload?: Record<string, unknown>;
+    source?: string;
+    sessionId?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return errorResponse(400, "Invalid JSON body");
   }
 
-  if (!body.message || typeof body.message !== "string" || !body.message.trim()) {
-    return errorResponse(400, "Missing required field: message");
+  if (!body.eventType || typeof body.eventType !== "string" || !body.eventType.trim()) {
+    return errorResponse(400, "Missing required field: eventType");
   }
+
+  const message = buildEventMessage(body.eventType.trim(), body.payload, body.source);
 
   try {
     const result = await runCharacterTurn(
-      body.message.trim(),
+      message,
       character,
       body.sessionId,
       config,
@@ -53,6 +70,6 @@ export async function handleCharacterChat(
     if (err.name === "AbortError" || err.message?.includes("timeout")) {
       return errorResponse(504, "LLM request timed out");
     }
-    return errorResponse(500, `Character chat error: ${err.message}`);
+    return errorResponse(500, `Character react error: ${err.message}`);
   }
 }

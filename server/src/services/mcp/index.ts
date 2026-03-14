@@ -5,6 +5,8 @@ import { registerJobTools } from "./job-tools";
 import { registerMemoryTools } from "./memory-tools";
 import { registerMessagingTools } from "./messaging-tools";
 import { registerCharacterTools } from "./character-tools";
+import { registerEventTools } from "./event-tools";
+import { registerCharacterSessionTools } from "./character-session-tools";
 import { registerApprovalTools } from "./approval-tools";
 import { registerRegistryTools } from "./registry-tools";
 import { registerSessionTools } from "./session-tools";
@@ -27,6 +29,9 @@ export function registerAllMcpHandlers(
   registerJobTools(server, getContext);
   registerMemoryTools(server, getContext);
   registerMessagingTools(server, getContext);
+  registerCharacterTools(server, getContext);
+  registerEventTools(server, getContext);
+  registerCharacterSessionTools(server, getContext);
 
   // P1: Approval operations (1 tool)
   registerApprovalTools(server, getContext);

@@ -6,7 +6,7 @@ import type { Config } from "../../config";
  * can paste into their MCP settings (e.g., Claude Code's mcp.json).
  */
 export function handleMcpConfig(_req: Request, config: Config): Response {
-  const serverUrl = `http://localhost:${config.port}`;
+  const serverUrl = config.baseUrl || `http://localhost:${config.port}`;
   return Response.json({
     mcpServers: {
       "logseq-ai-hub": {

@@ -17,7 +17,8 @@ export function createSendFollowUp(config: Config): (contactId: string, message:
     const platform = parts[0];
     const recipient = parts.slice(1).join(":"); // Handle edge case of colons in recipient
     try {
-      await fetch(`http://localhost:${config.port}/api/send`, {
+      const baseUrl = config.baseUrl || `http://localhost:${config.port}`;
+      await fetch(`${baseUrl}/api/send`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

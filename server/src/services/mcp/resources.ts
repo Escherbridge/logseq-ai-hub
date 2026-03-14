@@ -2,6 +2,8 @@ import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpToolContext } from "../../types/mcp";
 import { listContacts } from "../../db/contacts";
+import { listCharacters, getCharacter, getCharacterByName } from "../../db/characters";
+import { listCharacterSessions } from "../../db/character-sessions";
 
 export function registerResources(server: McpServer, getContext: () => McpToolContext): void {
   // logseq://pages/{name} - Read a specific page
@@ -112,6 +114,63 @@ export function registerResources(server: McpServer, getContext: () => McpToolCo
       try {
         const contacts = listContacts(ctx.db);
         return { contents: [{ uri: uri.href, text: JSON.stringify({ contacts, count: contacts.length }, null, 2), mimeType: "application/json" }] };
+      } catch (err: any) {
+        return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
+      }
+    },
+  );
+
+  // logseq://characters - All characters (server-side)
+  server.resource(
+    "logseq-characters",
+    "logseq://characters",
+    { description: "All character definitions", mimeType: "application/json" },
+    async (uri) => {
+      const ctx = getContext();
+      try {
+        const characters = listCharacters(ctx.db);
+        return { contents: [{ uri: uri.href, text: JSON.stringify({ characters, count: characters.length }, null, 2), mimeType: "application/json" }] };
+      } catch (err: any) {
+        return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
+      }
+    },
+  );
+
+  // logseq://characters/{id} - Single character by ID or name
+  server.resource(
+    "logseq-character",
+    new ResourceTemplate("logseq://characters/{id}", { list: undefined }),
+    { description: "Single character by ID or name", mimeType: "application/json" },
+    async (uri, variables) => {
+      const ctx = getContext();
+      const idOrName = variables.id as string;
+      try {
+        const character = getCharacter(ctx.db, idOrName) ?? getCharacterByName(ctx.db, idOrName);
+        if (!character) {
+          return { contents: [{ uri: uri.href, text: JSON.stringify({ error: "Character not found", idOrName }, null, 2), mimeType: "application/json" }] };
+        }
+        return { contents: [{ uri: uri.href, text: JSON.stringify(character, null, 2), mimeType: "application/json" }] };
+      } catch (err: any) {
+        return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
+      }
+    },
+  );
+
+  // logseq://character-sessions/{characterId} - Sessions for a character
+  server.resource(
+    "logseq-character-sessions",
+    new ResourceTemplate("logseq://character-sessions/{characterId}", { list: undefined }),
+    { description: "Character conversation sessions by character ID or name", mimeType: "application/json" },
+    async (uri, variables) => {
+      const ctx = getContext();
+      const characterIdOrName = variables.characterId as string;
+      try {
+        const character = getCharacter(ctx.db, characterIdOrName) ?? getCharacterByName(ctx.db, characterIdOrName);
+        if (!character) {
+          return { contents: [{ uri: uri.href, text: JSON.stringify({ error: "Character not found", characterIdOrName }, null, 2), mimeType: "application/json" }] };
+        }
+        const sessions = listCharacterSessions(ctx.db, character.id);
+        return { contents: [{ uri: uri.href, text: JSON.stringify({ characterId: character.id, sessions, count: sessions.length }, null, 2), mimeType: "application/json" }] };
       } catch (err: any) {
         return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
       }

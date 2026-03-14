@@ -1,281 +1,197 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpToolContext } from "../../types/mcp";
-import type { HubEvent } from "../../types";
+import { createHubEvent, listHubEvents } from "../../db/hub-events";
+import {
+  createEventSubscription,
+  getEventSubscription,
+  listEventSubscriptions,
+  deleteEventSubscription,
+  findMatchingSubscriptions,
+} from "../../db/event-subscriptions";
+
+const DEFAULT_LIST_LIMIT = 50;
+
+function err(text: string) {
+  return { content: [{ type: "text" as const, text }], isError: true as const };
+}
+
+function ok(data: unknown) {
+  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+}
+
+function clampLimit(limit: number | undefined, max: number): number {
+  if (limit === undefined || limit === null) return Math.min(DEFAULT_LIST_LIMIT, max);
+  const n = Number(limit);
+  if (!Number.isFinite(n) || n < 1) return Math.min(DEFAULT_LIST_LIMIT, max);
+  return Math.min(n, max);
+}
 
 export function registerEventTools(server: McpServer, getContext: () => McpToolContext): void {
-  // ── event_publish ──────────────────────────────────────────────────────
   server.tool(
-    "event_publish",
-    "Publish an event to the Event Hub",
+    "hub_event_emit",
+    "Emit a hub event (persisted and broadcast over SSE). Optional characterId and source.",
     {
-      type: z.string().describe("Event type (e.g. 'job.completed', 'webhook.received')"),
-      source: z.string().describe("Event source identifier (e.g. 'system:job-runner', 'webhook:github')"),
-      data: z.record(z.unknown()).describe("Event payload data"),
-      metadata: z.record(z.unknown()).optional().describe("Optional metadata (severity, tags, ttl, etc.)"),
+      type: z.string().describe("Event type identifier"),
+      payload: z.record(z.unknown()).optional().describe("Event payload object"),
+      characterId: z.string().nullable().optional(),
+      source: z.string().nullable().optional(),
     },
-    async (params) => {
+    async ({ type, payload, characterId, source }) => {
       const ctx = getContext();
-      if (!ctx.eventBus) {
-        return { content: [{ type: "text" as const, text: "Error: EventBus not available" }], isError: true as const };
-      }
+      const eventType = typeof type === "string" ? type.trim() : "";
+      if (!eventType) return err("Missing or empty event type");
       try {
-        const event = ctx.eventBus.publish({
-          type: params.type,
-          source: params.source,
-          data: params.data,
-          metadata: params.metadata as HubEvent["metadata"],
+        const event = createHubEvent(ctx.db, {
+          eventType,
+          payload: payload ?? undefined,
+          characterId: characterId ?? undefined,
+          source: source ?? undefined,
         });
-        return { content: [{ type: "text" as const, text: JSON.stringify(event, null, 2) }] };
-      } catch (err: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${err.message}` }], isError: true as const };
+        ctx.sseManager?.broadcast({
+          type: "hub_event",
+          data: {
+            id: event.id,
+            eventType: event.event_type,
+            payload: event.payload,
+            characterId: event.character_id,
+            source: event.source,
+            createdAt: event.created_at,
+          },
+        });
+        const triggered: { subscriptionId: string; jobName: string; jobId: string; skill: string }[] = [];
+        if (ctx.bridge?.isPluginConnected()) {
+          const subs = findMatchingSubscriptions(ctx.db, event.event_type, event.character_id);
+          const prefix = event.id.slice(0, 8);
+          for (const sub of subs) {
+            const jobName = `${sub.job_name_prefix}-${prefix}`;
+            try {
+              await ctx.bridge.sendRequest(
+                "create_job",
+                {
+                  name: jobName,
+                  type: "event-driven",
+                  priority: sub.priority,
+                  skill: sub.job_skill,
+                  input: {
+                    event: {
+                      id: event.id,
+                      type: event.event_type,
+                      payload: event.payload,
+                      characterId: event.character_id,
+                      source: event.source,
+                      createdAt: event.created_at,
+                    },
+                  },
+                },
+                ctx.traceId
+              );
+              triggered.push({ subscriptionId: sub.id, jobName, jobId: `Jobs/${jobName}`, skill: sub.job_skill });
+            } catch {
+              // skip failed subscription
+            }
+          }
+        }
+        return ok({ event, triggeredJobs: triggered });
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return err(`Error: ${message}`);
       }
-    },
+    }
   );
 
-  // ── event_query ────────────────────────────────────────────────────────
   server.tool(
-    "event_query",
-    "Query events from the Event Hub with optional filters",
+    "hub_event_list",
+    "List hub events with optional filters. Limit is clamped to server config.",
     {
       type: z.string().optional().describe("Filter by event type"),
-      source: z.string().optional().describe("Filter by event source"),
-      since: z.string().optional().describe("ISO timestamp - return events since this time"),
-      limit: z.number().optional().describe("Maximum events to return (default 50)"),
-      offset: z.number().optional().describe("Offset for pagination"),
+      characterId: z.string().optional(),
+      limit: z.number().optional().describe("Max number of events to return"),
+      since: z.string().optional().describe("Only events after this ISO timestamp"),
+    },
+    async ({ type, characterId, limit, since }) => {
+      const ctx = getContext();
+      const maxLimit = ctx.config.listLimitMax;
+      const clamped = clampLimit(limit, maxLimit);
+      const events = listHubEvents(ctx.db, { eventType: type, characterId, limit: clamped, since });
+      return ok(events);
+    }
+  );
+
+  server.tool(
+    "event_subscription_list",
+    "List event subscriptions with optional filters.",
+    {
+      eventType: z.string().optional(),
+      characterId: z.string().optional(),
+      enabled: z.boolean().optional(),
+    },
+    async ({ eventType, characterId, enabled }) => {
+      const ctx = getContext();
+      const subs = listEventSubscriptions(ctx.db, { eventType, characterId, enabled });
+      return ok(subs);
+    }
+  );
+
+  server.tool(
+    "event_subscription_create",
+    "Create an event subscription. When a matching hub event is emitted, a job is created.",
+    {
+      eventType: z.string().describe("Hub event type to match"),
+      jobSkill: z.string().describe("Skill page name to run (e.g. Skills/my-skill)"),
+      jobNamePrefix: z.string().describe("Prefix for the created job name"),
+      characterId: z.string().nullable().optional().describe("Match only events for this character; null = any"),
+      priority: z.number().min(1).max(5).optional(),
+      enabled: z.boolean().optional(),
     },
     async (params) => {
       const ctx = getContext();
-      if (!ctx.eventBus) {
-        return { content: [{ type: "text" as const, text: "Error: EventBus not available" }], isError: true as const };
-      }
+      const eventType = typeof params.eventType === "string" ? params.eventType.trim() : "";
+      const jobSkill = typeof params.jobSkill === "string" ? params.jobSkill.trim() : "";
+      const jobNamePrefix = typeof params.jobNamePrefix === "string" ? params.jobNamePrefix.trim() : "";
+      if (!eventType) return err("Missing or empty eventType");
+      if (!jobSkill) return err("Missing or empty jobSkill");
+      if (!jobNamePrefix) return err("Missing or empty jobNamePrefix");
       try {
-        const limit = Math.min(Math.max(params.limit || 50, 1), 200);
-        const result = ctx.eventBus.query({
-          type: params.type,
-          source: params.source,
-          since: params.since,
-          limit,
-          offset: params.offset,
+        const sub = createEventSubscription(ctx.db, {
+          eventType,
+          characterId: params.characterId ?? undefined,
+          jobSkill,
+          jobNamePrefix,
+          priority: params.priority,
+          enabled: params.enabled,
         });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (err: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${err.message}` }], isError: true as const };
+        return ok(sub);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return err(`Error: ${message}`);
       }
-    },
+    }
   );
 
-  // ── event_subscribe ────────────────────────────────────────────────────
   server.tool(
-    "event_subscribe",
-    "Create an event subscription page in Logseq that triggers actions on matching events",
-    {
-      name: z.string().describe("Subscription name (will be created as EventSub/<name>)"),
-      pattern: z.string().describe("Event type pattern to match (supports * wildcard, e.g. 'webhook.*')"),
-      action: z.enum(["log", "route", "skill"]).describe("Action to take when event matches"),
-      skill: z.string().optional().describe("Skill to trigger (required when action=skill)"),
-      routeTo: z.string().optional().describe("Route destination as 'platform:recipient' (required when action=route)"),
-      severityFilter: z.array(z.string()).optional().describe("Only match events with these severity levels"),
-    },
-    async (params) => {
+    "event_subscription_get",
+    "Get an event subscription by ID.",
+    { id: z.string().describe("Subscription ID") },
+    async ({ id }) => {
       const ctx = getContext();
-      if (!ctx.bridge?.isPluginConnected()) {
-        return { content: [{ type: "text" as const, text: "Error: Logseq plugin not connected" }], isError: true as const };
-      }
-      try {
-        const properties: Record<string, string> = {
-          "event-pattern": params.pattern,
-          "event-action": params.action,
-        };
-        if (params.skill) {
-          properties["event-skill"] = params.skill;
-        }
-        if (params.routeTo) {
-          properties["event-route-to"] = params.routeTo;
-        }
-        if (params.severityFilter && params.severityFilter.length > 0) {
-          properties["event-severity-filter"] = params.severityFilter.join(", ");
-        }
-
-        const result = await ctx.bridge.sendRequest(
-          "page_create",
-          {
-            name: `EventSub/${params.name}`,
-            properties,
-          },
-          ctx.traceId,
-        );
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (err: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${err.message}` }], isError: true as const };
-      }
-    },
+      const sub = getEventSubscription(ctx.db, id);
+      return sub ? ok(sub) : err(`Event subscription "${id}" not found`);
+    }
   );
 
-  // ── event_sources ──────────────────────────────────────────────────────
   server.tool(
-    "event_sources",
-    "List unique event sources from the Event Hub",
-    {},
-    async () => {
+    "event_subscription_delete",
+    "Delete an event subscription by ID.",
+    { id: z.string().describe("Subscription ID") },
+    async ({ id }) => {
       const ctx = getContext();
-      try {
-        const rows = ctx.db
-          .query("SELECT DISTINCT source FROM events ORDER BY source")
-          .all() as Array<{ source: string }>;
-        const sources = rows.map((r) => r.source);
-        return { content: [{ type: "text" as const, text: JSON.stringify({ sources, count: sources.length }, null, 2) }] };
-      } catch (err: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${err.message}` }], isError: true as const };
-      }
-    },
+      const existing = getEventSubscription(ctx.db, id);
+      if (!existing) return err(`Event subscription "${id}" not found`);
+      deleteEventSubscription(ctx.db, id);
+      return ok({ deleted: true, id });
+    }
   );
-
-  // ── event_recent ───────────────────────────────────────────────────────
-  server.tool(
-    "event_recent",
-    "Get recent events from the Event Hub",
-    {
-      limit: z.number().optional().describe("Number of events to return (default 10)"),
-    },
-    async (params) => {
-      const ctx = getContext();
-      if (!ctx.eventBus) {
-        return { content: [{ type: "text" as const, text: "Error: EventBus not available" }], isError: true as const };
-      }
-      try {
-        const result = ctx.eventBus.query({ limit: params.limit ?? 10 });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (err: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${err.message}` }], isError: true as const };
-      }
-    },
-  );
-
-  // ── webhook_test ───────────────────────────────────────────────────────
-  server.tool(
-    "webhook_test",
-    "Send a test webhook event to the Event Hub for testing subscriptions and pipelines",
-    {
-      source: z.string().describe("Webhook source name (will be prefixed with 'webhook:')"),
-      data: z.record(z.unknown()).optional().describe("Test event payload data"),
-    },
-    async (params) => {
-      const ctx = getContext();
-      if (!ctx.eventBus) {
-        return { content: [{ type: "text" as const, text: "Error: EventBus not available" }], isError: true as const };
-      }
-      try {
-        const event = ctx.eventBus.publish({
-          type: "webhook.test",
-          source: `webhook:${params.source}`,
-          data: params.data ?? {},
-        });
-        return { content: [{ type: "text" as const, text: JSON.stringify(event, null, 2) }] };
-      } catch (err: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${err.message}` }], isError: true as const };
-      }
-    },
-  );
-
-  // ── http_request ───────────────────────────────────────────────────────
-  server.tool(
-    "http_request",
-    "Make an HTTP request (for agent use). URLs are validated against the server's HTTP allowlist. HTTPS is enforced except for localhost.",
-    {
-      url: z.string().describe("Request URL (must be HTTPS unless localhost)"),
-      method: z.string().optional().describe("HTTP method (default GET)"),
-      headers: z.record(z.string()).optional().describe("Request headers"),
-      body: z.string().optional().describe("Request body"),
-      timeout: z.number().optional().describe("Timeout in milliseconds (default 10000, max 60000)"),
-    },
-    async (params) => {
-      const ctx = getContext();
-      const { url, method = "GET", headers = {}, body, timeout = 10000 } = params;
-
-      // Validate URL
-      let parsed: URL;
-      try {
-        parsed = new URL(url);
-      } catch {
-        return { content: [{ type: "text" as const, text: "Error: Invalid URL" }], isError: true as const };
-      }
-
-      // HTTPS enforcement (except localhost)
-      const isLocalhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
-      if (parsed.protocol === "http:" && !isLocalhost) {
-        return {
-          content: [{ type: "text" as const, text: "Error: HTTPS is required for non-localhost URLs" }],
-          isError: true as const,
-        };
-      }
-
-      // Allowlist check
-      const allowlist = ctx.config.httpAllowlist;
-      if (!allowlist || allowlist.length === 0) {
-        return {
-          content: [{ type: "text" as const, text: "Error: No URLs allowed. Configure HTTP_ALLOWLIST environment variable with comma-separated domains." }],
-          isError: true as const,
-        };
-      }
-      const hostname = parsed.hostname;
-      const allowed = allowlist.some((pattern) => {
-        if (pattern.startsWith("*.")) {
-          const suffix = pattern.slice(1); // ".example.com"
-          return hostname.endsWith(suffix);
-        }
-        return hostname === pattern;
-      });
-      if (!allowed) {
-        return {
-          content: [{ type: "text" as const, text: `Error: URL hostname '${hostname}' is not in the HTTP allowlist` }],
-          isError: true as const,
-        };
-      }
-
-      // Execute request
-      const effectiveTimeout = Math.min(Math.max(timeout, 1), 60000);
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), effectiveTimeout);
-
-      try {
-        const fetchOpts: RequestInit = {
-          method: method.toUpperCase(),
-          headers,
-          signal: controller.signal,
-        };
-        if (body && method.toUpperCase() !== "GET") {
-          fetchOpts.body = body;
-        }
-
-        const response = await fetch(url, fetchOpts);
-        clearTimeout(timer);
-
-        const contentType = response.headers.get("content-type") || "";
-        let responseBody: unknown;
-        if (contentType.includes("application/json")) {
-          responseBody = await response.json();
-        } else {
-          responseBody = await response.text();
-        }
-
-        const result = {
-          status: response.status,
-          ok: response.ok,
-          headers: Object.fromEntries(response.headers.entries()),
-          body: responseBody,
-        };
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (err: any) {
-        clearTimeout(timer);
-        if (err.name === "AbortError") {
-          return {
-            content: [{ type: "text" as const, text: `Error: Request timed out after ${effectiveTimeout}ms` }],
-            isError: true as const,
-          };
-        }
-        return { content: [{ type: "text" as const, text: `Error: ${err.message}` }], isError: true as const };
-      }
-    },
+}
   );
 }
