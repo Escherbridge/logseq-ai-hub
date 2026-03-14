@@ -9,6 +9,11 @@ import {
   updateCharacter,
   deleteCharacter,
 } from "../../db/characters";
+import {
+  setRelationship,
+  listRelationships,
+  deleteRelationship,
+} from "../../db/character-relationships";
 import { runCharacterTurn } from "../character-runtime";
 
 function resolve(ctx: McpToolContext, id: string) {
@@ -217,6 +222,72 @@ export function registerCharacterTools(server: McpServer, getContext: () => McpT
       } catch (e: any) {
         return err(`Error: ${e.message}`);
       }
+    },
+  );
+
+  server.tool(
+    "character_relationship_set",
+    "Set or update a directed relationship between two characters. Strength ranges from -100 (hostile) to +100 (devoted).",
+    {
+      fromId: z.string().describe("Source character ID or name"),
+      toId: z.string().describe("Target character ID or name"),
+      type: z.string().describe("Relationship type (e.g. 'friend', 'enemy', 'rival', 'mentor')"),
+      strength: z
+        .number()
+        .int()
+        .min(-100)
+        .max(100)
+        .optional()
+        .describe("Relationship strength from -100 to +100"),
+      notes: z.string().nullable().optional().describe("Optional context notes"),
+    },
+    async ({ fromId, toId, type, strength, notes }) => {
+      const ctx = getContext();
+      const from = resolve(ctx, fromId);
+      if (!from) return err(`Character "${fromId}" not found`);
+      const to = resolve(ctx, toId);
+      if (!to) return err(`Character "${toId}" not found`);
+      if (from.id === to.id) return err("A character cannot have a relationship with itself");
+      try {
+        const rel = setRelationship(ctx.db, from.id, to.id, {
+          type: type.trim(),
+          strength,
+          notes: notes ?? null,
+        });
+        return ok(rel);
+      } catch (e: any) {
+        return err(`Error: ${e.message}`);
+      }
+    },
+  );
+
+  server.tool(
+    "character_relationship_list",
+    "List all relationships for a character (both outgoing and incoming).",
+    { id: z.string().describe("Character ID or name") },
+    async ({ id }) => {
+      const ctx = getContext();
+      const character = resolve(ctx, id);
+      if (!character) return err(`Character "${id}" not found`);
+      return ok(listRelationships(ctx.db, character.id));
+    },
+  );
+
+  server.tool(
+    "character_relationship_delete",
+    "Delete a directed relationship between two characters.",
+    {
+      fromId: z.string().describe("Source character ID or name"),
+      toId: z.string().describe("Target character ID or name"),
+    },
+    async ({ fromId, toId }) => {
+      const ctx = getContext();
+      const from = resolve(ctx, fromId);
+      if (!from) return err(`Character "${fromId}" not found`);
+      const to = resolve(ctx, toId);
+      if (!to) return err(`Character "${toId}" not found`);
+      const deleted = deleteRelationship(ctx.db, from.id, to.id);
+      return deleted ? ok({ deleted: true }) : err("Relationship not found");
     },
   );
 }

@@ -22,6 +22,7 @@ export function handleHealth(
       counts = {
         characters: getCount("characters"),
         characterSessions: getCount("character_sessions"),
+        characterRelationships: getCount("character_relationships"),
         hubEvents: getCount("hub_events"),
         eventSubscriptions: getCount("event_subscriptions"),
       };

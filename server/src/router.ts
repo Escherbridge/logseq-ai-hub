@@ -30,6 +30,12 @@ import {
 import { handleCharacterChat } from "./routes/api/character-chat";
 import { handleCharacterReact } from "./routes/api/character-react";
 import {
+  handleListRelationships,
+  handleSetRelationship,
+  handleGetRelationship,
+  handleDeleteRelationship,
+} from "./routes/api/character-relationships";
+import {
   handleListCharacterSessions,
   handleGetCharacterSession,
   handleDeleteCharacterSession,
@@ -313,6 +319,30 @@ export function createRouter(ctx: RouteContext) {
       pattern: "/api/characters/:id/react",
       handler: (req, ctx, params) =>
         handleCharacterReact(req, ctx.config, ctx.db, ctx.agentBridge, params, ctx.traceId),
+    },
+    {
+      method: "GET",
+      pattern: "/api/characters/:id/relationships",
+      handler: (req, ctx, params) =>
+        handleListRelationships(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "PUT",
+      pattern: "/api/characters/:id/relationships/:targetId",
+      handler: (req, ctx, params) =>
+        handleSetRelationship(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "GET",
+      pattern: "/api/characters/:id/relationships/:targetId",
+      handler: (req, ctx, params) =>
+        handleGetRelationship(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "DELETE",
+      pattern: "/api/characters/:id/relationships/:targetId",
+      handler: (req, ctx, params) =>
+        handleDeleteRelationship(req, ctx.config, ctx.db, params),
     },
     {
       method: "GET",

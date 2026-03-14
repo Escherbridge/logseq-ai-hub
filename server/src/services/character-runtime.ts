@@ -9,6 +9,7 @@ import {
   getCharacterSession,
   saveCharacterSession,
 } from "../db/character-sessions";
+import { listRelationships } from "../db/character-relationships";
 import { chatCompletion } from "./llm";
 
 export interface CharacterTurnResult {
@@ -33,10 +34,37 @@ async function fetchMemories(bridge: AgentBridge, tag: string, traceId?: string)
   }
 }
 
-function buildSystemContent(name: string, systemPrompt: string | null, memories: string): string {
+function buildRelationshipSummary(
+  db: Database,
+  characterId: string
+): string {
+  try {
+    const rels = listRelationships(db, characterId);
+    if (rels.length === 0) return "";
+    return rels
+      .map((r) => {
+        const target = r.direction === "outgoing" ? `→ ${r.to_id}` : `← ${r.from_id}`;
+        const strength = r.strength !== 0 ? ` (${r.strength > 0 ? "+" : ""}${r.strength})` : "";
+        const note = r.notes ? `: ${r.notes}` : "";
+        return `${r.type}${strength} ${target}${note}`;
+      })
+      .join("\n");
+  } catch {
+    return "";
+  }
+}
+
+function buildSystemContent(
+  name: string,
+  systemPrompt: string | null,
+  memories: string,
+  relationships: string
+): string {
   const base = systemPrompt?.trim() || `You are ${name}. Stay in character at all times.`;
-  if (!memories) return base;
-  return `${base}\n\n## Your memories\n${memories}`;
+  let content = base;
+  if (relationships) content += `\n\n## Your relationships\n${relationships}`;
+  if (memories) content += `\n\n## Your memories\n${memories}`;
+  return content;
 }
 
 function buildCharacterTools(pluginConnected: boolean): any[] {
@@ -162,9 +190,11 @@ export async function runCharacterTurn(
       ? await fetchMemories(bridge!, character.memory_tag, traceId)
       : "";
 
+    const relationships = buildRelationshipSummary(db, character.id);
+
     const systemMessage: ConversationMessage = {
       role: "system",
-      content: buildSystemContent(character.name, character.system_prompt, memories),
+      content: buildSystemContent(character.name, character.system_prompt, memories, relationships),
     };
 
     session = createCharacterSession(db, character.id, [systemMessage]);

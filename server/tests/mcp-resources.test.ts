@@ -209,8 +209,8 @@ describe("registerAllMcpHandlers", () => {
     const templateResourceCount = Object.keys(getRegisteredResourceTemplates(server)).length;
     const promptCount = Object.keys(getRegisteredPrompts(server)).length;
 
-    // Tools: graph, job, memory, messaging, character (9), event (6), character-session (3), approval, registry, session, project, adr, lesson, safeguard, work, task, pidev
-    expect(toolCount).toBe(85);
+    // Tools: graph, job, memory, messaging, character (12), event (6), character-session (3), approval, registry, session, project, adr, lesson, safeguard, work, task, pidev
+    expect(toolCount).toBe(88);
 
     // Resources: 13 total (4 static + 9 templates)
     expect(staticResourceCount + templateResourceCount).toBe(13);

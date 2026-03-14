@@ -94,6 +94,51 @@ export function initializeSchema(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 
+    CREATE TABLE IF NOT EXISTS hub_events (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      character_id TEXT,
+      source TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_hub_events_type ON hub_events(event_type);
+    CREATE INDEX IF NOT EXISTS idx_hub_events_character ON hub_events(character_id);
+    CREATE INDEX IF NOT EXISTS idx_hub_events_created ON hub_events(created_at);
+
+    CREATE TABLE IF NOT EXISTS event_subscriptions (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      character_id TEXT,
+      job_skill TEXT NOT NULL,
+      job_name_prefix TEXT NOT NULL,
+      priority INTEGER NOT NULL DEFAULT 3,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_event_subscriptions_type ON event_subscriptions(event_type);
+    CREATE INDEX IF NOT EXISTS idx_event_subscriptions_character ON event_subscriptions(character_id);
+    CREATE INDEX IF NOT EXISTS idx_event_subscriptions_enabled ON event_subscriptions(enabled);
+
+    CREATE TABLE IF NOT EXISTS character_relationships (
+      from_id TEXT NOT NULL,
+      to_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      strength INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (from_id, to_id),
+      FOREIGN KEY (from_id) REFERENCES characters(id) ON DELETE CASCADE,
+      FOREIGN KEY (to_id) REFERENCES characters(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_char_rel_from ON character_relationships(from_id);
+    CREATE INDEX IF NOT EXISTS idx_char_rel_to ON character_relationships(to_id);
+
     CREATE TABLE IF NOT EXISTS events (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
