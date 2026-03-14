@@ -48,15 +48,13 @@ export function listRelationships(
   db: Database,
   characterId: string
 ): (CharacterRelationship & { direction: "outgoing" | "incoming" })[] {
-  const outgoing = db
-    .query(`SELECT *, 'outgoing' as direction FROM character_relationships WHERE from_id = ?`)
-    .all(characterId) as (CharacterRelationship & { direction: "outgoing" })[];
-
-  const incoming = db
-    .query(`SELECT *, 'incoming' as direction FROM character_relationships WHERE to_id = ?`)
-    .all(characterId) as (CharacterRelationship & { direction: "incoming" })[];
-
-  return [...outgoing, ...incoming];
+  return db
+    .query(
+      `SELECT *, 'outgoing' as direction FROM character_relationships WHERE from_id = ?
+       UNION ALL
+       SELECT *, 'incoming' as direction FROM character_relationships WHERE to_id = ?`
+    )
+    .all(characterId, characterId) as (CharacterRelationship & { direction: "outgoing" | "incoming" })[];
 }
 
 export function deleteRelationship(
