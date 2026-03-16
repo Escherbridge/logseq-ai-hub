@@ -290,4 +290,60 @@ export function registerCharacterTools(server: McpServer, getContext: () => McpT
       return deleted ? ok({ deleted: true }) : err("Relationship not found");
     },
   );
+
+  const MAX_SCENE_PARTICIPANTS = 20;
+
+  server.tool(
+    "character_scene_react",
+    "Run a scene: send one description to multiple characters in parallel and collect their reactions.",
+    {
+      description: z.string().describe("Scene description or event all characters will react to"),
+      characterIds: z
+        .array(z.string())
+        .min(1)
+        .max(MAX_SCENE_PARTICIPANTS)
+        .describe("Character IDs or names to include"),
+      sessionIds: z
+        .record(z.string())
+        .optional()
+        .describe("Optional map of character ID/name → existing session ID to continue"),
+    },
+    async ({ description, characterIds, sessionIds }) => {
+      const ctx = getContext();
+      if (!ctx.config.llmApiKey) return err("LLM API key not configured");
+
+      const tasks = characterIds.map(async (idOrName) => {
+        const character = resolve(ctx, idOrName);
+        if (!character) {
+          return { character: { id: idOrName, name: idOrName }, sessionId: "", response: "", error: `Character "${idOrName}" not found` };
+        }
+        const sessionId =
+          sessionIds?.[character.id] ?? sessionIds?.[character.name] ?? sessionIds?.[idOrName];
+        try {
+          const result = await runCharacterTurn(
+            description,
+            character,
+            sessionId,
+            ctx.config,
+            ctx.db,
+            ctx.bridge,
+            ctx.traceId
+          );
+          return { character: result.character, sessionId: result.sessionId, response: result.response };
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return { character: { id: character.id, name: character.name }, sessionId: sessionId ?? "", response: "", error: msg };
+        }
+      });
+
+      const results = await Promise.allSettled(tasks);
+      const reactions = results.map((r) =>
+        r.status === "fulfilled"
+          ? r.value
+          : { character: { id: "", name: "" }, sessionId: "", response: "", error: String(r.reason) }
+      );
+
+      return ok({ description, reactions });
+    },
+  );
 }

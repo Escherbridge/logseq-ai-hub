@@ -35,6 +35,7 @@ import {
   handleGetRelationship,
   handleDeleteRelationship,
 } from "./routes/api/character-relationships";
+import { handleRunScene } from "./routes/api/scenes";
 import {
   handleListCharacterSessions,
   handleGetCharacterSession,
@@ -343,6 +344,12 @@ export function createRouter(ctx: RouteContext) {
       pattern: "/api/characters/:id/relationships/:targetId",
       handler: (req, ctx, params) =>
         handleDeleteRelationship(req, ctx.config, ctx.db, params),
+    },
+    {
+      method: "POST",
+      pattern: "/api/scenes",
+      handler: (req, ctx) =>
+        handleRunScene(req, ctx.config, ctx.db, ctx.agentBridge, ctx.traceId),
     },
     {
       method: "GET",

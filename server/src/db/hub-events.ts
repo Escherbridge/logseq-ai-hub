@@ -19,17 +19,17 @@ export function createHubEvent(
   }
 ): HubEvent {
   const id = crypto.randomUUID();
-  const query = db.query(
-    `INSERT INTO hub_events (id, event_type, payload, character_id, source) VALUES (?, ?, ?, ?, ?) RETURNING *`
+  db.run(
+    `INSERT INTO hub_events (id, event_type, payload, character_id, source) VALUES (?, ?, ?, ?, ?)`,
+    [
+      id,
+      data.eventType,
+      JSON.stringify(data.payload ?? {}),
+      data.characterId ?? null,
+      data.source ?? null,
+    ]
   );
-  const row = query.get(
-    id,
-    data.eventType,
-    JSON.stringify(data.payload ?? {}),
-    data.characterId ?? null,
-    data.source ?? null,
-  ) as HubEventRow;
-  return toHubEvent(row);
+  return getHubEvent(db, id)!;
 }
 
 interface HubEventRow {

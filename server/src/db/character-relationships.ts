@@ -17,17 +17,17 @@ export function setRelationship(
 ): CharacterRelationship {
   const strength = data.strength ?? 0;
   const notes = data.notes ?? null;
-  const query = db.query(
+  db.run(
     `INSERT INTO character_relationships (from_id, to_id, type, strength, notes, updated_at)
      VALUES (?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(from_id, to_id) DO UPDATE SET
        type = excluded.type,
        strength = excluded.strength,
        notes = excluded.notes,
-       updated_at = datetime('now')
-     RETURNING *`
+       updated_at = datetime('now')`,
+    [fromId, toId, data.type, strength, notes]
   );
-  return query.get(fromId, toId, data.type, strength, notes) as CharacterRelationship;
+  return getRelationship(db, fromId, toId)!;
 }
 
 export function getRelationship(
@@ -48,13 +48,15 @@ export function listRelationships(
   db: Database,
   characterId: string
 ): (CharacterRelationship & { direction: "outgoing" | "incoming" })[] {
-  return db
-    .query(
-      `SELECT *, 'outgoing' as direction FROM character_relationships WHERE from_id = ?
-       UNION ALL
-       SELECT *, 'incoming' as direction FROM character_relationships WHERE to_id = ?`
-    )
-    .all(characterId, characterId) as (CharacterRelationship & { direction: "outgoing" | "incoming" })[];
+  const outgoing = db
+    .query(`SELECT *, 'outgoing' as direction FROM character_relationships WHERE from_id = ?`)
+    .all(characterId) as (CharacterRelationship & { direction: "outgoing" })[];
+
+  const incoming = db
+    .query(`SELECT *, 'incoming' as direction FROM character_relationships WHERE to_id = ?`)
+    .all(characterId) as (CharacterRelationship & { direction: "incoming" })[];
+
+  return [...outgoing, ...incoming];
 }
 
 export function deleteRelationship(
