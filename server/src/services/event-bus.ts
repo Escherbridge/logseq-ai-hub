@@ -27,8 +27,8 @@ export class EventBus {
       ...(event.metadata ? { metadata: event.metadata } : {}),
     };
 
-    // Duplicate detection: hash = sorted-keys JSON of data
-    const hash = JSON.stringify(
+    // Duplicate detection: composite key = type + source + sorted-keys JSON of data
+    const dataHash = JSON.stringify(
       Object.keys(hubEvent.data)
         .sort()
         .reduce<Record<string, unknown>>((acc, key) => {
@@ -36,13 +36,14 @@ export class EventBus {
           return acc;
         }, {})
     );
+    const dedupeKey = `${hubEvent.type}:${hubEvent.source}:${dataHash}`;
 
-    const lastSeen = this.dedupeMap.get(hash);
+    const lastSeen = this.dedupeMap.get(dedupeKey);
     if (lastSeen !== undefined && now - lastSeen < EventBus.DEDUPE_WINDOW_MS) {
       // Duplicate within window -- skip store and broadcast
       return { ...hubEvent, _deduplicated: true } as HubEvent & { _deduplicated: boolean };
     }
-    this.dedupeMap.set(hash, now);
+    this.dedupeMap.set(dedupeKey, now);
 
     // Clean up old entries from dedup map periodically
     if (this.dedupeMap.size > 1000) {

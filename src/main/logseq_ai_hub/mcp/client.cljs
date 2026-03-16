@@ -7,7 +7,7 @@
 (defonce servers (atom {}))
 
 (def ^:private max-reconnect-attempts 3)
-(def ^:private reconnect-delays [1000 5000 15000]) ; Exponential backoff in ms
+(def ^:dynamic reconnect-delays [1000 5000 15000]) ; Exponential backoff in ms
 
 (defn with-timeout
   "Wraps a promise with a timeout. Returns the original promise result or
@@ -137,9 +137,8 @@
 
       (-> (perform-connection server-id config transport-instance)
           (.catch (fn [err]
-                    ;; Connection failed - attempt reconnect
-                    (swap! servers update-in [server-id :reconnect-count] inc)
-                    (attempt-reconnect server-id config 1)))))))
+                    ;; Connection failed - attempt reconnect starting at attempt 0
+                    (attempt-reconnect server-id config 0)))))))
 
 (defn disconnect-server!
   "Disconnects from an MCP server and cleans up resources."

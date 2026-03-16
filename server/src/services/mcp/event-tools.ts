@@ -193,3 +193,5 @@ export function registerEventTools(server: McpServer, getContext: () => McpToolC
     }
   );
 }
+  );
+}

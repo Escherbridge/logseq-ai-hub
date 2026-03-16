@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  cljs-tests:
+    name: ClojureScript Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Cache shadow-cljs
+        uses: actions/cache@v4
+        with:
+          path: .shadow-cljs
+          key: shadow-cljs-${{ hashFiles('shadow-cljs.edn', 'yarn.lock') }}
+          restore-keys: shadow-cljs-
+
+      - name: Compile tests
+        run: npx shadow-cljs compile node-test
+
+      - name: Run tests
+        run: node out/test/node-tests.js
+
+  server-tests:
+    name: Server Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: cd server && bun install
+
+      - name: Run tests
+        run: cd server && bun test

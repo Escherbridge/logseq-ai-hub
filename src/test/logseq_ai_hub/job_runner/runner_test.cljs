@@ -110,6 +110,8 @@
 (defn make-mock-job
   ([job-id skill-name]
    (make-mock-job job-id skill-name {} 3 #{}))
+  ([job-id skill-name inputs]
+   (make-mock-job job-id skill-name inputs 3 #{}))
   ([job-id skill-name inputs priority depends-on]
    {:job-id job-id
     :job-skill skill-name
@@ -123,6 +125,54 @@
 (defn make-mock-skill [skill-name]
   {:skill-name skill-name
    :steps [{:step-order 1 :step-action :action-1}]})
+
+;; ---------------------------------------------------------------------------
+;; Setup / Teardown helpers (use set! instead of with-redefs for async safety)
+;; ---------------------------------------------------------------------------
+
+(defn- setup-enqueue-mocks!
+  "Wire mocks needed for enqueue-job! tests."
+  []
+  (reset-mock-graph!)
+  (reset-mock-queue!)
+  (runner/reset-runner!)
+  (set! runner/graph-read-job-page mock-read-job-page)
+  (set! runner/graph-update-job-status! mock-update-job-status!)
+  (set! runner/queue-enqueue mock-enqueue)
+  (set! runner/queue-make-queue mock-make-queue)
+  (set! runner/queue-remove-from-queue mock-remove-from-queue))
+
+(defn- setup-execute-mocks!
+  "Wire mocks needed for execute-job! tests."
+  []
+  (reset-mock-graph!)
+  (reset-mock-engine!)
+  (runner/reset-runner!)
+  (set! runner/graph-read-job-page mock-read-job-page)
+  (set! runner/graph-read-skill-page mock-read-skill-page)
+  (set! runner/graph-update-job-status! mock-update-job-status!)
+  (set! runner/graph-update-job-property! mock-update-job-property!)
+  (set! runner/graph-append-job-log! mock-append-job-log!)
+  (set! runner/engine-execute-skill-with-retries mock-execute-skill-with-retries))
+
+(defn- setup-full-mocks!
+  "Wire all mocks (enqueue + execute + dequeue)."
+  []
+  (reset-mock-graph!)
+  (reset-mock-engine!)
+  (reset-mock-queue!)
+  (runner/reset-runner!)
+  (set! runner/graph-read-job-page mock-read-job-page)
+  (set! runner/graph-read-skill-page mock-read-skill-page)
+  (set! runner/graph-scan-job-pages mock-scan-job-pages)
+  (set! runner/graph-update-job-status! mock-update-job-status!)
+  (set! runner/graph-update-job-property! mock-update-job-property!)
+  (set! runner/graph-append-job-log! mock-append-job-log!)
+  (set! runner/engine-execute-skill-with-retries mock-execute-skill-with-retries)
+  (set! runner/queue-enqueue mock-enqueue)
+  (set! runner/queue-dequeue mock-dequeue)
+  (set! runner/queue-make-queue mock-make-queue)
+  (set! runner/queue-remove-from-queue mock-remove-from-queue))
 
 ;; Tests
 
@@ -146,155 +196,114 @@
 
 (deftest test-enqueue-job
   (async done
-    (with-redefs [runner/graph-read-job-page mock-read-job-page
-                  runner/graph-update-job-status! mock-update-job-status!
-                  runner/queue-enqueue mock-enqueue
-                  runner/queue-make-queue mock-make-queue]
-      (reset-mock-graph!)
-      (reset-mock-queue!)
-      (runner/reset-runner!)
+    (setup-enqueue-mocks!)
+    (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
+           (make-mock-job "Jobs/Test Job" "Skills/Test Skill" {} 3 #{}))
 
-      (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
-             (make-mock-job "Jobs/Test Job" "Skills/Test Skill" {} 3 #{}))
-
-      (-> (runner/enqueue-job! "Jobs/Test Job")
-          (.then (fn [_]
-                   (let [status (runner/runner-status)]
-                     (is (= 1 (:queued status)))
-                     (is (= 1 (count (:enqueue-calls @mock-queue-state))))
-                     (is (some #(= "queued" (:status %))
-                              (:status-updates @mock-graph-state)))
-                     (done))))
-          (.catch (fn [err]
-                    (is false (str "Should not fail: " err))
-                    (done)))))))
+    (-> (runner/enqueue-job! "Jobs/Test Job")
+        (.then (fn [_]
+                 (let [status (runner/runner-status)]
+                   (is (= 1 (:queued status)))
+                   (is (= 1 (count (:enqueue-calls @mock-queue-state))))
+                   (is (some #(= "queued" (:status %))
+                            (:status-updates @mock-graph-state)))
+                   (done))))
+        (.catch (fn [err]
+                  (is false (str "Should not fail: " err))
+                  (done))))))
 
 (deftest test-cancel-job
   (async done
-    (with-redefs [runner/graph-read-job-page mock-read-job-page
-                  runner/graph-update-job-status! mock-update-job-status!
-                  runner/queue-enqueue mock-enqueue
-                  runner/queue-remove-from-queue mock-remove-from-queue
-                  runner/queue-make-queue mock-make-queue]
-      (reset-mock-graph!)
-      (reset-mock-queue!)
-      (runner/reset-runner!)
+    (setup-enqueue-mocks!)
+    (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
+           (make-mock-job "Jobs/Test Job" "Skills/Test Skill"))
 
-      (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
-             (make-mock-job "Jobs/Test Job" "Skills/Test Skill"))
-
-      (-> (runner/enqueue-job! "Jobs/Test Job")
-          (.then (fn [_]
-                   (runner/cancel-job! "Jobs/Test Job")))
-          (.then (fn [_]
-                   (let [status (runner/runner-status)]
-                     (is (= 0 (:queued status)))
-                     (is (some #(= "cancelled" (:status %))
-                              (:status-updates @mock-graph-state)))
-                     (done))))
-          (.catch (fn [err]
-                    (is false (str "Should not fail: " err))
-                    (done)))))))
+    (-> (runner/enqueue-job! "Jobs/Test Job")
+        (.then (fn [_]
+                 (runner/cancel-job! "Jobs/Test Job")))
+        (.then (fn [_]
+                 (let [status (runner/runner-status)]
+                   (is (= 0 (:queued status)))
+                   (is (some #(= "cancelled" (:status %))
+                            (:status-updates @mock-graph-state)))
+                   (done))))
+        (.catch (fn [err]
+                  (is false (str "Should not fail: " err))
+                  (done))))))
 
 (deftest test-pause-resume-job
   (async done
-    (with-redefs [runner/graph-read-job-page mock-read-job-page
-                  runner/graph-update-job-status! mock-update-job-status!
-                  runner/queue-enqueue mock-enqueue
-                  runner/queue-remove-from-queue mock-remove-from-queue
-                  runner/queue-make-queue mock-make-queue]
-      (reset-mock-graph!)
-      (reset-mock-queue!)
-      (runner/reset-runner!)
+    (setup-enqueue-mocks!)
+    (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
+           (make-mock-job "Jobs/Test Job" "Skills/Test Skill"))
 
-      (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
-             (make-mock-job "Jobs/Test Job" "Skills/Test Skill"))
-
-      (-> (runner/enqueue-job! "Jobs/Test Job")
-          (.then (fn [_]
-                   (runner/pause-job! "Jobs/Test Job")))
-          (.then (fn [_]
-                   (is (= 0 (:queued (runner/runner-status))))
-                   (is (some #(= "paused" (:status %))
-                            (:status-updates @mock-graph-state)))
-                   (runner/resume-job! "Jobs/Test Job")))
-          (.then (fn [_]
-                   (is (= 1 (:queued (runner/runner-status))))
-                   (done)))
-          (.catch (fn [err]
-                    (is false (str "Should not fail: " err))
-                    (done)))))))
+    (-> (runner/enqueue-job! "Jobs/Test Job")
+        (.then (fn [_]
+                 (runner/pause-job! "Jobs/Test Job")))
+        (.then (fn [_]
+                 (is (= 0 (:queued (runner/runner-status))))
+                 (is (some #(= "paused" (:status %))
+                          (:status-updates @mock-graph-state)))
+                 (runner/resume-job! "Jobs/Test Job")))
+        (.then (fn [_]
+                 (is (= 1 (:queued (runner/runner-status))))
+                 (done)))
+        (.catch (fn [err]
+                  (is false (str "Should not fail: " err))
+                  (done))))))
 
 (deftest test-execute-job-success
   (async done
-    (with-redefs [runner/graph-read-job-page mock-read-job-page
-                  runner/graph-read-skill-page mock-read-skill-page
-                  runner/graph-update-job-status! mock-update-job-status!
-                  runner/graph-update-job-property! mock-update-job-property!
-                  runner/graph-append-job-log! mock-append-job-log!
-                  runner/engine-execute-skill-with-retries mock-execute-skill-with-retries]
-      (reset-mock-graph!)
-      (reset-mock-engine!)
-      (runner/reset-runner!)
+    (setup-execute-mocks!)
+    (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
+           (make-mock-job "Jobs/Test Job" "Skills/Test Skill" {:input1 "value1"}))
+    (swap! mock-graph-state assoc-in [:skills "Skills/Test Skill"]
+           (make-mock-skill "Skills/Test Skill"))
 
-      (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
-             (make-mock-job "Jobs/Test Job" "Skills/Test Skill" {:input1 "value1"}))
-      (swap! mock-graph-state assoc-in [:skills "Skills/Test Skill"]
-             (make-mock-skill "Skills/Test Skill"))
+    (set-skill-result! "Skills/Test Skill"
+                      {:status :completed
+                       :result {:output "success-result"}
+                       :duration-ms 150})
 
-      (set-skill-result! "Skills/Test Skill"
-                        {:status :completed
-                         :result {:output "success-result"}
-                         :duration-ms 150})
-
-      (-> (runner/execute-job! "Jobs/Test Job")
-          (.then (fn [_]
-                   (is (some #(= "running" (:status %))
-                            (:status-updates @mock-graph-state)))
-                   (is (some #(= "completed" (:status %))
-                            (:status-updates @mock-graph-state)))
-                   (is (some #(and (= "job-result" (:key %))
-                                  (= "{:output \"success-result\"}" (:val %)))
-                            (:property-updates @mock-graph-state)))
-                   (is (pos? (count (:log-entries @mock-graph-state))))
-                   (done)))
-          (.catch (fn [err]
-                    (is false (str "Should not fail: " err))
-                    (done)))))))
+    (-> (runner/execute-job! "Jobs/Test Job")
+        (.then (fn [_]
+                 (is (some #(= "running" (:status %))
+                          (:status-updates @mock-graph-state)))
+                 (is (some #(= "completed" (:status %))
+                          (:status-updates @mock-graph-state)))
+                 (is (some #(and (= "job-result" (:key %))
+                                (= "{:output \"success-result\"}" (:val %)))
+                          (:property-updates @mock-graph-state)))
+                 (is (pos? (count (:log-entries @mock-graph-state))))
+                 (done)))
+        (.catch (fn [err]
+                  (is false (str "Should not fail: " err))
+                  (done))))))
 
 (deftest test-execute-job-failure
   (async done
-    (with-redefs [runner/graph-read-job-page mock-read-job-page
-                  runner/graph-read-skill-page mock-read-skill-page
-                  runner/graph-update-job-status! mock-update-job-status!
-                  runner/graph-update-job-property! mock-update-job-property!
-                  runner/graph-append-job-log! mock-append-job-log!
-                  runner/engine-execute-skill-with-retries mock-execute-skill-with-retries]
-      (reset-mock-graph!)
-      (reset-mock-engine!)
-      (runner/reset-runner!)
+    (setup-execute-mocks!)
+    (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
+           (make-mock-job "Jobs/Test Job" "Skills/Test Skill"))
+    (swap! mock-graph-state assoc-in [:skills "Skills/Test Skill"]
+           (make-mock-skill "Skills/Test Skill"))
 
-      (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
-             (make-mock-job "Jobs/Test Job" "Skills/Test Skill"))
-      (swap! mock-graph-state assoc-in [:skills "Skills/Test Skill"]
-             (make-mock-skill "Skills/Test Skill"))
+    (set-skill-result! "Skills/Test Skill"
+                      {:status :failed
+                       :error {:type :step-execution-error :message "Step failed"}
+                       :failed-step 1
+                       :duration-ms 50})
 
-      (set-skill-result! "Skills/Test Skill"
-                        {:status :failed
-                         :error {:type :step-execution-error :message "Step failed"}
-                         :failed-step 1
-                         :duration-ms 50})
-
-      (-> (runner/execute-job! "Jobs/Test Job")
-          (.then (fn [_]
-                   (is (some #(= "failed" (:status %))
-                            (:status-updates @mock-graph-state)))
-                   (is (some #(and (= "job-error" (:key %)))
-                            (:property-updates @mock-graph-state)))
-                   (done)))
-          (.catch (fn [err]
-                    (is false (str "Should not fail: " err))
-                    (done)))))))
+    (-> (runner/execute-job! "Jobs/Test Job")
+        (.then (fn [_]
+                 (is (some #(= "failed" (:status %))
+                          (:status-updates @mock-graph-state)))
+                 (is (some #(and (= "job-error" (:key %)))
+                          (:property-updates @mock-graph-state)))
+                 (done)))
+        (.catch (fn [err]
+                  (is false (str "Should not fail: " err))
+                  (done))))))
 
 (deftest test-build-status-map
   (testing "Build status map from runner state"
@@ -312,84 +321,66 @@
 
 (deftest test-poll-tick-dequeues-eligible-job
   (async done
-    (with-redefs [runner/graph-read-job-page mock-read-job-page
-                  runner/graph-read-skill-page mock-read-skill-page
-                  runner/graph-update-job-status! mock-update-job-status!
-                  runner/graph-update-job-property! mock-update-job-property!
-                  runner/graph-append-job-log! mock-append-job-log!
-                  runner/engine-execute-skill-with-retries mock-execute-skill-with-retries
-                  runner/queue-dequeue mock-dequeue
-                  runner/queue-enqueue mock-enqueue
-                  runner/queue-make-queue mock-make-queue]
-      (reset-mock-graph!)
-      (reset-mock-engine!)
-      (reset-mock-queue!)
-      (runner/reset-runner!)
+    (setup-full-mocks!)
+    (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
+           (make-mock-job "Jobs/Test Job" "Skills/Test Skill"))
+    (swap! mock-graph-state assoc-in [:skills "Skills/Test Skill"]
+           (make-mock-skill "Skills/Test Skill"))
 
-      (swap! mock-graph-state assoc-in [:jobs "Jobs/Test Job"]
-             (make-mock-job "Jobs/Test Job" "Skills/Test Skill"))
-      (swap! mock-graph-state assoc-in [:skills "Skills/Test Skill"]
-             (make-mock-skill "Skills/Test Skill"))
-
-      (-> (runner/enqueue-job! "Jobs/Test Job")
-          (.then (fn [_]
-                   ;; Simulate poll tick
-                   (runner/poll-tick!)))
-          (.then (fn [_]
-                   ;; Wait for async execution
-                   (js/setTimeout
-                    (fn []
-                      (is (pos? (count (:dequeue-calls @mock-queue-state))))
-                      (is (= 0 (:queued (runner/runner-status))))
-                      (done))
-                    100)))
-          (.catch (fn [err]
-                    (is false (str "Should not fail: " err))
-                    (done)))))))
+    (-> (runner/enqueue-job! "Jobs/Test Job")
+        (.then (fn [_]
+                 ;; Runner must be :running for poll-tick! to dequeue
+                 (swap! runner/runner-state assoc :status :running)
+                 ;; Simulate poll tick
+                 (runner/poll-tick!)))
+        (.then (fn [_]
+                 ;; Wait for async execution to settle
+                 (js/setTimeout
+                  (fn []
+                    (is (pos? (count (:dequeue-calls @mock-queue-state))))
+                    (is (= 0 (:queued (runner/runner-status))))
+                    ;; Clean up the polling timer scheduled by poll-tick!
+                    (runner/stop-runner!)
+                    (done))
+                  100)))
+        (.catch (fn [err]
+                  (is false (str "Should not fail: " err))
+                  (done))))))
 
 (deftest test-dependency-resolution
   (async done
-    (with-redefs [runner/graph-read-job-page mock-read-job-page
-                  runner/graph-update-job-status! mock-update-job-status!
-                  runner/queue-dequeue mock-dequeue
-                  runner/queue-enqueue mock-enqueue
-                  runner/queue-make-queue mock-make-queue]
-      (reset-mock-graph!)
-      (reset-mock-queue!)
-      (runner/reset-runner!)
+    (setup-enqueue-mocks!)
+    (set! runner/queue-dequeue mock-dequeue)
 
-      (swap! mock-graph-state assoc-in [:jobs "Jobs/Job1"]
-             (make-mock-job "Jobs/Job1" "Skills/Skill1" {} 3 #{}))
-      (swap! mock-graph-state assoc-in [:jobs "Jobs/Job2"]
-             (make-mock-job "Jobs/Job2" "Skills/Skill2" {} 3 #{"Jobs/Job1"}))
+    (swap! mock-graph-state assoc-in [:jobs "Jobs/Job1"]
+           (make-mock-job "Jobs/Job1" "Skills/Skill1" {} 3 #{}))
+    (swap! mock-graph-state assoc-in [:jobs "Jobs/Job2"]
+           (make-mock-job "Jobs/Job2" "Skills/Skill2" {} 3 #{"Jobs/Job1"}))
 
-      (-> (runner/enqueue-job! "Jobs/Job1")
-          (.then (fn [_] (runner/enqueue-job! "Jobs/Job2")))
-          (.then (fn [_]
-                   ;; Mark Job1 as completed
-                   (swap! runner/runner-state assoc-in [:completed "Jobs/Job1"] {:result "ok"})
-                   ;; Try to dequeue - should get Job2 now
-                   (let [queue (get @runner/runner-state :queue)
-                         status-map (runner/build-status-map)
-                         eligible (mock-dequeue queue status-map 3 #{})]
-                     (is (= "Jobs/Job2" (:job-id eligible)))
-                     (done))))
-          (.catch (fn [err]
-                    (is false (str "Should not fail: " err))
-                    (done)))))))
+    (-> (runner/enqueue-job! "Jobs/Job1")
+        (.then (fn [_] (runner/enqueue-job! "Jobs/Job2")))
+        (.then (fn [_]
+                 ;; Mark Job1 as completed
+                 (swap! runner/runner-state assoc-in [:completed "Jobs/Job1"] {:result "ok"})
+                 ;; Try to dequeue - should get Job2 now
+                 (let [queue (get @runner/runner-state :queue)
+                       status-map (runner/build-status-map)
+                       eligible (mock-dequeue queue status-map 3 #{})]
+                   (is (= "Jobs/Job2" (:job-id eligible)))
+                   (done))))
+        (.catch (fn [err]
+                  (is false (str "Should not fail: " err))
+                  (done))))))
 
 (deftest test-start-stop-runner
   (async done
-    (with-redefs [runner/graph-scan-job-pages mock-scan-job-pages]
-      (reset-mock-graph!)
-      (runner/reset-runner!)
-
-      (-> (runner/start-runner!)
-          (.then (fn [_]
-                   (is (= :running (:status (runner/runner-status))))
-                   (runner/stop-runner!)
-                   (is (= :stopped (:status (runner/runner-status))))
-                   (done)))
-          (.catch (fn [err]
-                    (is false (str "Should not fail: " err))
-                    (done)))))))
+    (setup-full-mocks!)
+    (-> (runner/start-runner!)
+        (.then (fn [_]
+                 (is (= :running (:status (runner/runner-status))))
+                 (runner/stop-runner!)
+                 (is (= :stopped (:status (runner/runner-status))))
+                 (done)))
+        (.catch (fn [err]
+                  (is false (str "Should not fail: " err))
+                  (done))))))

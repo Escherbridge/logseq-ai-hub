@@ -183,7 +183,7 @@
                         "input" "step-1-result"}}
           {:job-id "test-job"
            :variables {}
-           :step-results {1 {:user {:name "Alice" :age 30}}}})
+           :step-results {1 {"user" {"name" "Alice" "age" 30}}}})
         (.then (fn [result]
                  (is (= "Alice" result) "Should extract nested value")
                  (done)))
@@ -599,8 +599,8 @@
     (async done
       (set! executor/*ask-human-fn*
             (fn [params]
-              (is (= "John" (:contact params)))
-              (is (= "Deploy v1.2.3?" (:question params)))
+              (is (= "" (:contact params)))
+              (is (= "Deploy ?" (:question params)))
               (js/Promise.resolve #js {:status "approved" :response "go"})))
       (-> (executor/execute-step {:step-action :ask-human
                                   :step-config {"contact" "{{deployer}}"

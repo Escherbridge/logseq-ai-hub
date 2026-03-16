@@ -5,7 +5,8 @@
 
 ;; Mock transport factory
 (defn make-mock-transport
-  "Creates a mock transport that can simulate responses."
+  "Creates a mock transport that can simulate responses.
+   Notifications (messages without :id) are treated as fire-and-forget."
   [responses-atom]
   {:type :mock
    :send! (fn [message]
@@ -14,11 +15,15 @@
                (let [method (:method message)
                      id (:id message)
                      response (get @responses-atom method)]
-                 (if response
-                   (if (:error response)
-                     (reject (js/Error. (:error response)))
-                     (resolve (assoc response :id id)))
-                   (reject (js/Error. (str "No mock response for method: " method))))))))
+                 (cond
+                   ;; Notifications (no id) are fire-and-forget
+                   (nil? id) (resolve nil)
+                   ;; Known response
+                   response (if (:error response)
+                              (reject (js/Error. (:error response)))
+                              (resolve (assoc response :id id)))
+                   ;; Unknown method
+                   :else (reject (js/Error. (str "No mock response for method: " method))))))))
    :close! (fn [] nil)})
 
 (deftest connect-server-test
@@ -92,46 +97,51 @@
   (testing "connect-server! retries on failure with exponential backoff"
     (async done
       (reset! client/servers {})
-      (let [attempt-count (atom 0)
-            attempt-times (atom [])
-            start-time (js/Date.now)
-            responses (atom nil)
-            config {:id "retry-server"
-                    :url "http://example.com/mcp"
-                    :name "Retry Server"
-                    :transport-type :mock
-                    :make-transport-fn (fn [_]
-                                         {:type :mock
-                                          :send! (fn [_]
-                                                   (swap! attempt-count inc)
-                                                   (swap! attempt-times conj (- (js/Date.now) start-time))
-                                                   (js/Promise.reject (js/Error. "Connection failed")))
-                                          :close! (fn [] nil)})}]
+      ;; Use fast delays for testing
+      (let [original-delays client/reconnect-delays]
+        (set! client/reconnect-delays [50 100 150])
+        (let [attempt-count (atom 0)
+              attempt-times (atom [])
+              start-time (js/Date.now)
+              config {:id "retry-server"
+                      :url "http://example.com/mcp"
+                      :name "Retry Server"
+                      :transport-type :mock
+                      :make-transport-fn (fn [_]
+                                           {:type :mock
+                                            :send! (fn [_]
+                                                     (swap! attempt-count inc)
+                                                     (swap! attempt-times conj (- (js/Date.now) start-time))
+                                                     (js/Promise.reject (js/Error. "Connection failed")))
+                                            :close! (fn [] nil)})}]
 
-        (-> (client/connect-server! config)
-            (.then (fn [_]
-                     (is false "Should not succeed")
-                     (done)))
-            (.catch (fn [_]
-                      ;; Should attempt: initial + 3 retries = 4 total
-                      (js/setTimeout
-                       (fn []
-                         (is (= 4 @attempt-count))
-                         (is (= :error (get-in @client/servers ["retry-server" :status])))
-                         (is (= 3 (get-in @client/servers ["retry-server" :reconnect-count])))
+          (-> (client/connect-server! config)
+              (.then (fn [_]
+                       (is false "Should not succeed")
+                       (set! client/reconnect-delays original-delays)
+                       (done)))
+              (.catch (fn [_]
+                        ;; Should attempt: initial + 3 retries = 4 total
+                        ;; All attempts are done by the time catch fires
+                        (js/setTimeout
+                         (fn []
+                           (is (= 4 @attempt-count))
+                           (is (= :error (get-in @client/servers ["retry-server" :status])))
+                           (is (= 3 (get-in @client/servers ["retry-server" :reconnect-count])))
 
-                         ;; Verify exponential backoff timing (approximately)
-                         ;; First attempt: ~0ms
-                         ;; Second attempt: ~1000ms
-                         ;; Third attempt: ~6000ms (1000 + 5000)
-                         ;; Fourth attempt: ~21000ms (1000 + 5000 + 15000)
-                         (is (< (nth @attempt-times 0) 100))
-                         (is (> (nth @attempt-times 1) 900))
-                         (is (> (nth @attempt-times 2) 5500))
-                         (is (> (nth @attempt-times 3) 20000))
+                           ;; Verify exponential backoff timing (approximately)
+                           ;; First attempt: ~0ms
+                           ;; Second attempt: ~50ms
+                           ;; Third attempt: ~150ms (50 + 100)
+                           ;; Fourth attempt: ~300ms (50 + 100 + 150)
+                           (is (< (nth @attempt-times 0) 30))
+                           (is (> (nth @attempt-times 1) 30))
+                           (is (> (nth @attempt-times 2) 120))
+                           (is (> (nth @attempt-times 3) 250))
 
-                         (done))
-                       22000))))))))
+                           (set! client/reconnect-delays original-delays)
+                           (done))
+                         100)))))))))
 
 (deftest list-tools-cached-test
   (testing "list-tools returns cached tools if available"
@@ -329,5 +339,5 @@
                    (is false "Should have failed")
                    (done)))
           (.catch (fn [err]
-                    (is (re-find #"not connected" (.-message err)))
+                    (is (re-find #"not found" (.-message err)))
                     (done)))))))

@@ -1,0 +1,7 @@
+{
+  "id": "proprietary-server-bootstrap_20260312",
+  "description": "Create a private GitHub repository for the proprietary multi-tenant server. Copy server/, set up independent build, Docker deployment, CI, multi-tenant config scaffolding, API contract docs.",
+  "type": "feature",
+  "created_at": "2026-03-12T00:00:00.000Z",
+  "status": "pending"
+}

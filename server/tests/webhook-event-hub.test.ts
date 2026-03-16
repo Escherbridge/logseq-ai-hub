@@ -159,9 +159,12 @@ describe("Event Hub Webhook", () => {
       expect(json.error).toContain("Invalid JSON");
     });
 
-    test("oversized content-length returns 413", async () => {
-      const req = makePostRequest("github", { data: "test" }, {
-        "content-length": "2000000",
+    test("oversized body returns 413", async () => {
+      const largeBody = "x".repeat(1_048_577); // 1 byte over MAX_BODY_SIZE
+      const req = new Request("http://localhost/webhook/event/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: largeBody,
       });
       const res = await handleEventWebhook(req, ctx, { source: "github" });
 

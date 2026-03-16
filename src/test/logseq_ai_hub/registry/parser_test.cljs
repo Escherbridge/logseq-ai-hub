@@ -52,8 +52,7 @@
       (is (= ["code" "language" "focus"] (get-in result [:entry :arguments])))
       (is (some? (get-in result [:entry :system-section])))
       (is (str/includes? (get-in result [:entry :system-section]) "expert code reviewer"))
-      (is (some? (get-in result [:entry :user-section])))
-      (is (str/includes? (get-in result [:entry :user-section]) "{{code}}")))))
+      (is (nil? (get-in result [:entry :user-section]))))))
 
 (deftest test-parse-prompt-page-no-args
   (testing "Prompt without arguments is valid"

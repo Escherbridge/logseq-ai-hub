@@ -27,7 +27,7 @@
         (is (= 5000 (:event-debounce entry)))
         (is (= "whatsapp:15551234567" (:event-route-to entry)))
         (is (= #{:warning :error :critical} (:event-severity-filter entry)))
-        (is (= "Handle Grafana alerts" (:event-description entry)))
+        (is (= "Handle Grafana alerts" (:description entry)))
         (is (= :graph-page (:source entry)))))))
 
 (deftest test-parse-subscription-page-minimal
@@ -44,7 +44,7 @@
         (is (= 0 (:event-debounce entry)))
         (is (nil? (:event-route-to entry)))
         (is (nil? (:event-severity-filter entry)))
-        (is (= "" (:event-description entry)))))))
+        (is (= "" (:description entry)))))))
 
 (deftest test-parse-subscription-page-route-action
   (testing "Parses a subscription with route action"

@@ -22,6 +22,7 @@ pom.xml.asc
 .cpcache/
 main.js
 cljs-runtime
+manifest.edn
 
 # New additions
 .clj-kondo/.cache
@@ -30,6 +31,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 out/
+
+.env
+.claude/
 
 # Server
 server/node_modules/

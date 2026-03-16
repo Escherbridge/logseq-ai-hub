@@ -9,11 +9,11 @@
   (testing "init-store! creates empty registry with expected structure"
     (store/init-store!)
     (let [snap (store/get-snapshot)]
-      (is (= [] (:tools snap)))
-      (is (= [] (:prompts snap)))
-      (is (= [] (:procedures snap)))
-      (is (= [] (:agents snap)))
-      (is (= [] (:skills snap)))
+      (is (empty? (:tools snap)))
+      (is (empty? (:prompts snap)))
+      (is (empty? (:procedures snap)))
+      (is (empty? (:agents snap)))
+      (is (empty? (:skills snap)))
       (is (= 0 (:version snap)))
       (is (nil? (:last-scan snap))))))
 

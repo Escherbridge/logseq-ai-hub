@@ -1,0 +1,7 @@
+{
+  "id": "plugin-dual-auth_20260312",
+  "description": "Add dual authentication to the Logseq plugin: simple bearer token for open-source server, JWT for proprietary multi-tenant server. Centralized auth namespace, authMode/jwtToken settings, silent migration.",
+  "type": "feature",
+  "created_at": "2026-03-12T00:00:00.000Z",
+  "status": "pending"
+}

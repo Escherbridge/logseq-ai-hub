@@ -1,8 +1,15 @@
 {
   "name": "logseq-ai-hub-server",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "description": "Bun/TypeScript server for Logseq AI Hub - webhook ingestion, MCP tools, and agent sessions",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/escherbridge/logseq-ai-hub.git",
+    "directory": "server"
+  },
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",

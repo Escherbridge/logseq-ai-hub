@@ -1,6 +1,7 @@
 (ns logseq-ai-hub.core-test
-  (:require [cljs.test :refer-macros [deftest is testing]]
-            [logseq-ai-hub.core :as core]))
+  (:require [cljs.test :refer-macros [deftest is testing async]]
+            [logseq-ai-hub.core :as core]
+            [logseq-ai-hub.settings-writer :as settings-writer]))
 
 (def updated-settings (atom {}))
 
@@ -8,6 +9,7 @@
   "Sets up mock logseq object with given settings."
   [settings-map]
   (reset! updated-settings {})
+  (settings-writer/reset-queue!)
   (set! js/logseq
     #js {:settings (clj->js settings-map)
          :useSettingsSchema (fn [_] nil)
@@ -41,12 +43,13 @@
       (is (= "anthropic/claude-sonnet-4" (:default (find-setting "llmModel"))))
       (is (= "" (:default (find-setting "llmApiKey")))))))
 
-(deftest test-settings-schema-selected-model
-  (testing "selectedModel enum includes llm-model as an option and default"
-    (let [find-setting (fn [key] (first (filter #(= key (:key %)) core/settings-schema)))
-          selected (find-setting "selectedModel")]
-      (is (some #(= "llm-model" %) (:enumChoices selected)))
-      (is (= "llm-model" (:default selected))))))
+(deftest test-settings-schema-event-hub-keys
+  (testing "settings schema contains event hub settings"
+    (let [keys (set (map :key core/settings-schema))]
+      (is (contains? keys "eventHubEnabled"))
+      (is (contains? keys "httpAllowlist"))
+      (is (contains? keys "eventRetentionDays"))
+      (is (contains? keys "eventGraphPersistence")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Migration Tests (FR-1 — backwards-compat migration from old key names)
@@ -54,16 +57,24 @@
 
 (deftest test-migrate-copies-old-to-new
   (testing "migration copies old key values to new keys when new keys are empty"
-    (setup-mocks! {"openAIKey" "sk-my-key"
-                   "openAIEndpoint" "https://custom.api.com/v1"
-                   "chatModel" "custom-model"
-                   "llmApiKey" ""
-                   "llmEndpoint" ""
-                   "llmModel" ""})
-    (core/migrate-settings!)
-    (is (= "sk-my-key" (:llmApiKey @updated-settings)))
-    (is (= "https://custom.api.com/v1" (:llmEndpoint @updated-settings)))
-    (is (= "custom-model" (:llmModel @updated-settings)))))
+    (async done
+      (setup-mocks! {"openAIKey" "sk-my-key"
+                     "openAIEndpoint" "https://custom.api.com/v1"
+                     "chatModel" "custom-model"
+                     "llmApiKey" ""
+                     "llmEndpoint" ""
+                     "llmModel" ""})
+      (core/migrate-settings!)
+      ;; Wait for the settings writer queue to flush
+      (-> (:promise @settings-writer/queue-state)
+          (.then (fn [_]
+                   (is (= "sk-my-key" (:llmApiKey @updated-settings)))
+                   (is (= "https://custom.api.com/v1" (:llmEndpoint @updated-settings)))
+                   (is (= "custom-model" (:llmModel @updated-settings)))
+                   (done)))
+          (.catch (fn [err]
+                    (is false (str "Unexpected error: " err))
+                    (done)))))))
 
 (deftest test-migrate-preserves-new-values
   (testing "migration does NOT overwrite existing new key values"
@@ -99,17 +110,25 @@
 
 (deftest test-migrate-partial-old-values
   (testing "migration migrates only the old keys that have values"
-    (setup-mocks! {"openAIKey" "sk-partial"
-                   "openAIEndpoint" ""
-                   "chatModel" ""
-                   "llmApiKey" ""
-                   "llmEndpoint" ""
-                   "llmModel" ""})
-    (core/migrate-settings!)
-    ;; Only llmApiKey should have been updated
-    (is (= "sk-partial" (:llmApiKey @updated-settings)))
-    (is (not (contains? @updated-settings :llmEndpoint)))
-    (is (not (contains? @updated-settings :llmModel)))))
+    (async done
+      (setup-mocks! {"openAIKey" "sk-partial"
+                     "openAIEndpoint" ""
+                     "chatModel" ""
+                     "llmApiKey" ""
+                     "llmEndpoint" ""
+                     "llmModel" ""})
+      (core/migrate-settings!)
+      ;; Wait for the settings writer queue to flush
+      (-> (:promise @settings-writer/queue-state)
+          (.then (fn [_]
+                   ;; Only llmApiKey should have been updated
+                   (is (= "sk-partial" (:llmApiKey @updated-settings)))
+                   (is (not (contains? @updated-settings :llmEndpoint)))
+                   (is (not (contains? @updated-settings :llmModel)))
+                   (done)))
+          (.catch (fn [err]
+                    (is false (str "Unexpected error: " err))
+                    (done)))))))
 
 (deftest test-migrate-preserves-default-values-if-intentional
   (testing "migration does NOT overwrite new keys that hold the default value"

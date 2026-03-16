@@ -76,7 +76,8 @@ export async function handleQueryEvents(
   const since = url.searchParams.get("since") || undefined;
   const rawLimit = parseInt(url.searchParams.get("limit") || "50", 10);
   const limit = Math.min(Math.max(rawLimit, 1), 200);
-  const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+  const rawOffset = parseInt(url.searchParams.get("offset") || "0", 10);
+  const offset = Math.max(isNaN(rawOffset) ? 0 : rawOffset, 0);
 
   const { events, total } = ctx.eventBus.query({
     type,
