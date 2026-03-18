@@ -1,7 +1,8 @@
 (ns logseq-ai-hub.core-test
   (:require [cljs.test :refer-macros [deftest is testing async]]
             [logseq-ai-hub.core :as core]
-            [logseq-ai-hub.settings-writer :as settings-writer]))
+            [logseq-ai-hub.settings-writer :as settings-writer]
+            [clojure.string :as str]))
 
 (def updated-settings (atom {}))
 
@@ -35,6 +36,18 @@
       (is (not (contains? keys "openAIKey")))
       (is (not (contains? keys "openAIEndpoint")))
       (is (not (contains? keys "chatModel"))))))
+
+(deftest test-settings-schema-has-auth-keys
+  (testing "settings schema contains authMode and jwtToken"
+    (let [keys (set (map :key core/settings-schema))
+          find-setting (fn [k] (first (filter #(= k (:key %)) core/settings-schema)))]
+      (is (contains? keys "authMode"))
+      (is (contains? keys "jwtToken"))
+      (is (contains? keys "pluginApiToken"))
+      (is (= "token" (:default (find-setting "authMode"))))
+      (is (= "enum"  (:type  (find-setting "authMode"))))
+      (is (= "" (:default (find-setting "jwtToken"))))
+      (is (= ["token" "jwt"] (:enumChoices (find-setting "authMode")))))))
 
 (deftest test-settings-schema-defaults
   (testing "new settings have correct defaults"
@@ -142,3 +155,73 @@
     (core/migrate-settings!)
     ;; llmEndpoint should NOT be overwritten — it already has a value
     (is (not (contains? @updated-settings :llmEndpoint)))))
+
+;; ---------------------------------------------------------------------------
+;; Auth Mode Migration Tests (FR-6)
+;; ---------------------------------------------------------------------------
+
+(deftest test-migrate-backfills-auth-mode-for-token-users
+  (testing "existing token users get authMode set to \"token\" when it is absent"
+    (async done
+      (setup-mocks! {"pluginApiToken" "my-existing-token"})
+      (core/migrate-settings!)
+      (-> (:promise @settings-writer/queue-state)
+          (.then (fn [_]
+                   (is (= "token" (:authMode @updated-settings)))
+                   (done)))
+          (.catch (fn [err]
+                    (is false (str "Unexpected error: " err))
+                    (done)))))))
+
+(deftest test-migrate-does-not-overwrite-existing-auth-mode
+  (testing "migration leaves authMode alone when it is already set"
+    (setup-mocks! {"pluginApiToken" "my-token"
+                   "authMode" "jwt"})
+    (core/migrate-settings!)
+    (is (not (contains? @updated-settings :authMode)))))
+
+(deftest test-migrate-skips-auth-mode-backfill-when-no-token
+  (testing "no authMode backfill when pluginApiToken is blank"
+    (setup-mocks! {"pluginApiToken" ""})
+    (core/migrate-settings!)
+    (is (not (contains? @updated-settings :authMode))))
+
+  (testing "no authMode backfill when pluginApiToken is absent"
+    (setup-mocks! {})
+    (core/migrate-settings!)
+    (is (not (contains? @updated-settings :authMode)))))
+
+;; ---------------------------------------------------------------------------
+;; Auth Warning Tests (FR-7)
+;; ---------------------------------------------------------------------------
+
+(deftest test-check-auth-config-warns-jwt-mode-no-token
+  (testing "warns when JWT mode is selected but jwtToken is blank"
+    (let [warnings (atom [])]
+      (setup-mocks! {"authMode" "jwt" "jwtToken" ""})
+      (set! (.-warn js/console) (fn [& args] (swap! warnings conj (str/join " " args))))
+      (#'core/check-auth-config!)
+      (is (some #(str/includes? % "JWT mode") @warnings)))))
+
+(deftest test-check-auth-config-warns-token-mode-no-token
+  (testing "warns when token mode is selected but pluginApiToken is blank"
+    (let [warnings (atom [])]
+      (setup-mocks! {"authMode" "token" "pluginApiToken" ""})
+      (set! (.-warn js/console) (fn [& args] (swap! warnings conj (str/join " " args))))
+      (#'core/check-auth-config!)
+      (is (some #(str/includes? % "no API token") @warnings)))))
+
+(deftest test-check-auth-config-no-warning-when-configured
+  (testing "no warning when token mode and token is set"
+    (let [warnings (atom [])]
+      (setup-mocks! {"authMode" "token" "pluginApiToken" "my-token"})
+      (set! (.-warn js/console) (fn [& args] (swap! warnings conj (str/join " " args))))
+      (#'core/check-auth-config!)
+      (is (empty? @warnings))))
+
+  (testing "no warning when jwt mode and jwt token is set"
+    (let [warnings (atom [])]
+      (setup-mocks! {"authMode" "jwt" "jwtToken" "eyJ.payload.sig"})
+      (set! (.-warn js/console) (fn [& args] (swap! warnings conj (str/join " " args))))
+      (#'core/check-auth-config!)
+      (is (empty? @warnings)))))

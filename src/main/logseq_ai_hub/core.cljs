@@ -12,18 +12,30 @@
             [logseq-ai-hub.registry.init :as registry-init]
             [logseq-ai-hub.code-repo.init :as code-repo-init]
             [logseq-ai-hub.event-hub.init :as event-hub-init]
+            [logseq-ai-hub.auth :as auth]
             [clojure.string :as str]))
 
 (def settings-schema
-  [{:key "webhookServerUrl"
+  [   {:key "webhookServerUrl"
     :type "string"
     :title "Webhook Server URL"
     :description "URL of your AI Hub webhook server (e.g. https://your-app.railway.app)"
     :default ""}
+   {:key "authMode"
+    :type "enum"
+    :title "Auth Mode"
+    :description "Authentication mode: \"token\" for single-tenant open-source server, \"jwt\" for multi-tenant server."
+    :default "token"
+    :enumChoices ["token" "jwt"]}
    {:key "pluginApiToken"
     :type "string"
     :title "Plugin API Token"
-    :description "Shared secret token for authenticating with the webhook server."
+    :description "Shared secret token for authenticating with the webhook server (used when Auth Mode is \"token\")."
+    :default ""}
+   {:key "jwtToken"
+    :type "string"
+    :title "JWT Token"
+    :description "Long-lived JWT from the admin dashboard (used when Auth Mode is \"jwt\")."
     :default ""}
    {:key "memoryEnabled"
     :type "boolean"
@@ -147,7 +159,7 @@
     :default true}])
 
 (defn migrate-settings!
-  "Migrates old OpenAI-specific settings keys to new provider-agnostic names.
+  "Migrates old settings keys to new names and backfills new settings for existing users.
    Copies values forward only if old key has value and new key is empty/default."
   []
   (let [settings js/logseq.settings]
@@ -162,7 +174,17 @@
           (settings-writer/queue-settings-write!
             (fn []
               (js/logseq.updateSettings (clj->js {(keyword new-key) old-val}))
-              (js/console.log (str "Settings migration: " old-key " -> " new-key)))))))))
+              (js/console.log (str "Settings migration: " old-key " -> " new-key)))))))
+    ;; Backfill authMode for existing token users: if they have a pluginApiToken
+    ;; but authMode has never been set, default them to "token" mode explicitly.
+    (let [existing-token (aget settings "pluginApiToken")
+          existing-mode  (aget settings "authMode")]
+      (when (and (not (str/blank? existing-token))
+                 (nil? existing-mode))
+        (settings-writer/queue-settings-write!
+          (fn []
+            (js/logseq.updateSettings (clj->js {:authMode "token"}))
+            (js/console.log "Settings migration: backfilled authMode -> token")))))))
 
 (defn handle-llm-command [e]
   (let [block-uuid (.-uuid e)]
@@ -184,10 +206,24 @@
                   (js/logseq.Editor.insertBlock block-uuid
                     (str "Error: " (if (instance? js/Error err) (.-message err) (str err)))))))))
 
+(defn- check-auth-config!
+  "Logs a warning when the selected auth mode has no token configured."
+  []
+  (let [mode (auth/get-auth-mode)]
+    (cond
+      (and (= mode "jwt")
+           (str/blank? (aget js/logseq "settings" "jwtToken")))
+      (js/console.warn "[Auth] JWT mode selected but no JWT token configured")
+
+      (and (= mode "token")
+           (str/blank? (aget js/logseq "settings" "pluginApiToken")))
+      (js/console.warn "[Auth] Token mode selected but no API token configured"))))
+
 (defn main []
   (js/console.log "Loaded Logseq AI Hub Plugin")
   (js/logseq.useSettingsSchema (clj->js settings-schema))
   (migrate-settings!)
+  (check-auth-config!)
   (js/logseq.Editor.registerSlashCommand "LLM" handle-llm-command)
   (secrets/init!)
   (secrets/register-commands!)
