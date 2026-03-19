@@ -1,11 +1,12 @@
 (ns logseq-ai-hub.event-hub.publish
-  "Publishes events to the server's EventBus via authenticated HTTP.")
+  "Publishes events to the server's EventBus via authenticated HTTP."
+  (:require [logseq-ai-hub.auth :as auth]))
 
 (defn- get-server-url []
   (aget js/logseq "settings" "webhookServerUrl"))
 
 (defn- get-api-token []
-  (aget js/logseq "settings" "pluginApiToken"))
+  (auth/get-auth-token))
 
 (defn publish-to-server!
   "Publishes an event to the server's EventBus.

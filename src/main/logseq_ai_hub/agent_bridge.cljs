@@ -14,6 +14,7 @@
             [logseq-ai-hub.code-repo.work :as work]
             [logseq-ai-hub.code-repo.tasks :as tasks]
             [logseq-ai-hub.code-repo.pi-agents :as pi-agents]
+            [logseq-ai-hub.auth :as auth]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -24,7 +25,7 @@
   (aget js/logseq.settings "webhookServerUrl"))
 
 (defn- get-api-token []
-  (aget js/logseq.settings "pluginApiToken"))
+  (auth/get-auth-token))
 
 (defn send-callback!
   "Sends the result of an agent request back to the server."
