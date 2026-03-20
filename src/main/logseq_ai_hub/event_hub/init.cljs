@@ -7,6 +7,7 @@
             [logseq-ai-hub.event-hub.emit :as emit]
             [logseq-ai-hub.event-hub.graph-watcher :as graph-watcher]
             [logseq-ai-hub.event-hub.commands :as commands]
+            [logseq-ai-hub.auth :as auth]
             [logseq-ai-hub.messaging :as messaging]
             [logseq-ai-hub.job-runner.runner :as runner]))
 
@@ -16,7 +17,7 @@
   (aget js/logseq "settings" "webhookServerUrl"))
 
 (defn- get-api-token []
-  (aget js/logseq "settings" "pluginApiToken"))
+  (auth/get-auth-token))
 
 (defn- fetch-recent-events
   "Fetches recent events from GET /api/events?limit=10.

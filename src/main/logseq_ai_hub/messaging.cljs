@@ -1,5 +1,6 @@
 (ns logseq-ai-hub.messaging
   (:require [clojure.string :as str]
+            [logseq-ai-hub.auth :as auth]
             [logseq-ai-hub.agent-bridge :as agent-bridge]))
 
 ;; ---------------------------------------------------------------------------
@@ -42,8 +43,9 @@
     (catch :default _
       nil)))
 
-(defn- build-sse-url [server-url api-token]
-  (str server-url "/events?token=" (js/encodeURIComponent api-token)))
+(defn- build-sse-url [server-url]
+  (let [token (auth/get-auth-token)]
+    (str server-url "/events?token=" (js/encodeURIComponent token))))
 
 (defn- platform-display [platform]
   (case platform
@@ -171,7 +173,7 @@
        (js/clearTimeout timer))
      ;; Close existing connection without setting intentional flag
      (disconnect-internal!)
-     (let [url (build-sse-url server-url api-token)
+     (let [url (build-sse-url server-url)
            es  (js/EventSource. url)]
        ;; Register event listeners for each SSE event type
        (doseq [event-type ["new_message" "message_sent" "connected" "heartbeat"]]
@@ -206,7 +208,8 @@
   "Sends a message via the webhook server API.
    Returns a Promise resolving to the API response map."
   [platform recipient content]
-  (let [{:keys [server-url api-token]} @state]
+  (let [{:keys [server-url]} @state
+        api-token (auth/get-auth-token)]
     (if (or (str/blank? server-url) (str/blank? api-token))
       (js/Promise.reject (js/Error. "Not connected to server"))
       (-> (js/fetch (str server-url "/api/send")
@@ -243,7 +246,7 @@
   []
   (let [settings js/logseq.settings
         server-url (aget settings "webhookServerUrl")
-        api-token (aget settings "pluginApiToken")]
+        api-token (auth/get-auth-token)]
     (when (and server-url api-token
                (not (str/blank? server-url))
                (not (str/blank? api-token)))
