@@ -243,6 +243,8 @@ export function registerEventTools(server: McpServer, getContext: () => McpToolC
           method: method.toUpperCase(),
           headers,
           signal: controller.signal,
+          // Never auto-follow: a 3xx from an allowlisted host must not reach a non-allowlisted one
+          redirect: "manual",
         };
         if (body && method.toUpperCase() !== "GET") {
           fetchOpts.body = body;
