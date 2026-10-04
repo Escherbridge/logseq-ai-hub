@@ -12,6 +12,7 @@ Transform Logseq into a central orchestration layer for AI workflows, MCP tools,
 - [Architecture Overview](#architecture-overview)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
+- [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [MCP Integration](#mcp-integration)
@@ -83,6 +84,65 @@ Transform Logseq into a central orchestration layer for AI workflows, MCP tools,
 | Bun | >= 1.0 | Server runtime |
 | Logseq | Desktop app | Host environment for the plugin |
 | LLM API Key | -- | Required for AI features (OpenRouter recommended) |
+
+Only the LLM key and the Logseq desktop app are needed to *use* the plugin from a release; Node, Java and Bun are for building it and running the server yourself.
+
+---
+
+## Installation
+
+<!-- TODO(marketplace): add resources/screenshot.png showing the plugin in action and reference it here -->
+
+### 1. Install the plugin
+
+**From the Logseq Marketplace** (recommended): open Logseq, go to **Settings** > **Plugins** > **Marketplace**, search for **Logseq AI Hub** and click **Install**.
+
+**From a release zip** (manual): download `logseq-ai-hub-<version>.zip` from the [latest release](https://github.com/escherbridge/logseq-ai-hub/releases/latest), unzip it, enable **Developer mode** under **Settings** > **Advanced**, then **Plugins** > **Load unpacked plugin** and pick the unzipped folder.
+
+The plugin works on its own for local features (memory, secrets, job runner, registry). Messaging, MCP tool exposure and the Event Hub need the companion server below.
+
+### 2. Deploy the server
+
+The server is a single Bun process with a SQLite database. Any host that runs a Dockerfile works; `server/` ships a `Dockerfile` and a `railway.json` with the healthcheck pre-configured.
+
+**Railway**
+
+1. Create a service from this GitHub repository and set its **Root Directory** to `/server`.
+2. Attach a **Volume** mounted at `/app/data` (SQLite lives there and must survive redeploys).
+3. Set the variables below, then generate a public domain for the service.
+
+| Variable | Required | Value |
+|---|---|---|
+| `PLUGIN_API_TOKEN` | yes | `openssl rand -hex 32` — the shared secret the plugin presents as `Authorization: Bearer` |
+| `DATABASE_PATH` | yes | `/app/data/hub.sqlite` (inside the mounted volume) |
+| `LLM_API_KEY` | for AI features | your OpenRouter (or OpenAI-compatible) key |
+| `WEBHOOK_SECRET` | recommended | `openssl rand -hex 24`; inbound `/webhook/event/:source` calls must send it as `X-Webhook-Secret` |
+
+The full variable list is in [`server/.env.example`](server/.env.example). `GET /health` returns `{"status":"ok", ...}` once the service is up.
+
+**Docker (any host)**
+
+```bash
+cd server
+docker build -t logseq-ai-hub-server .
+docker run -p 3000:3000 -v "$PWD/data:/app/data" \
+  -e PLUGIN_API_TOKEN=... -e DATABASE_PATH=/app/data/hub.sqlite -e LLM_API_KEY=... \
+  logseq-ai-hub-server
+```
+
+### 3. Connect the plugin to the server
+
+In Logseq open **Settings** > **Plugin Settings** > **Logseq AI Hub** and set:
+
+- **Webhook Server URL** — the server's public URL (e.g. `https://logseq-ai-hub-production.up.railway.app`)
+- **Authentication Mode** — `token`
+- **Plugin API Token** — the same `PLUGIN_API_TOKEN` value you gave the server
+
+The plugin opens an SSE connection to the server on load; the server's `/health` reports `agentApi.pluginConnected: true` once it is linked.
+
+### Receiving webhooks (e.g. Railway deploy events)
+
+Any service that can POST JSON can feed the Event Hub: point it at `https://<server>/webhook/event/<source>` with the header `X-Webhook-Secret: <WEBHOOK_SECRET>`. The payload is published as a `webhook.received` event from `webhook:<source>`, and Event Hub subscriptions in your graph can route it to pages, skills or jobs. For Railway itself, add a project webhook (Project Settings > Webhooks) with that URL and header and pick the deployment events you care about.
 
 ---
 
