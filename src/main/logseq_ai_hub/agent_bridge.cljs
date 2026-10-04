@@ -6,6 +6,7 @@
             [logseq-ai-hub.mcp.client :as mcp-client]
             [logseq-ai-hub.secrets :as secrets]
             [logseq-ai-hub.memory :as memory]
+            [logseq-ai-hub.auth :as auth]
             [logseq-ai-hub.registry.bridge :as registry-bridge]
             [logseq-ai-hub.code-repo.bridge :as code-repo-bridge]
             [logseq-ai-hub.code-repo.adr :as adr]
@@ -23,16 +24,13 @@
 (defn- get-server-url []
   (aget js/logseq.settings "webhookServerUrl"))
 
-(defn- get-api-token []
-  (aget js/logseq.settings "pluginApiToken"))
-
 (defn send-callback!
   "Sends the result of an agent request back to the server."
   ([request-id success data error]
    (send-callback! request-id success data error nil))
   ([request-id success data error trace-id]
    (let [server-url (get-server-url)
-         token (get-api-token)
+         token (auth/get-auth-token)
          url (str server-url "/api/agent/callback")
          body (cond-> {:requestId request-id
                        :success success}

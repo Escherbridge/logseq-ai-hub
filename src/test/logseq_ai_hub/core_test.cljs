@@ -130,6 +130,62 @@
                     (is false (str "Unexpected error: " err))
                     (done)))))))
 
+;; ---------------------------------------------------------------------------
+;; Auth Mode Migration Tests (FR-6 -- plugin-dual-auth)
+;; ---------------------------------------------------------------------------
+
+(deftest test-migrate-sets-auth-mode-token-for-existing-user
+  (testing "existing user with pluginApiToken but no authMode gets authMode=token"
+    (async done
+      (setup-mocks! {"pluginApiToken" "existing-token"
+                     "llmApiKey" "" "llmEndpoint" "" "llmModel" ""})
+      (core/migrate-settings!)
+      (-> (:promise @settings-writer/queue-state)
+          (.then (fn [_]
+                   (is (= "token" (:authMode @updated-settings)))
+                   (done)))
+          (.catch (fn [err]
+                    (is false (str "Unexpected error: " err))
+                    (done)))))))
+
+(deftest test-migrate-does-not-overwrite-existing-auth-mode
+  (testing "user who already set authMode is left untouched"
+    (setup-mocks! {"pluginApiToken" "existing-token"
+                   "authMode" "jwt"
+                   "llmApiKey" "" "llmEndpoint" "" "llmModel" ""})
+    (core/migrate-settings!)
+    (is (not (contains? @updated-settings :authMode)))))
+
+(deftest test-migrate-skips-auth-mode-for-new-user
+  (testing "new user with no pluginApiToken gets no authMode migration"
+    (setup-mocks! {"pluginApiToken" ""
+                   "llmApiKey" "" "llmEndpoint" "" "llmModel" ""})
+    (core/migrate-settings!)
+    (is (not (contains? @updated-settings :authMode)))))
+
+(deftest test-migrate-auth-mode-idempotent
+  (testing "running migrate-settings! twice produces the same end state"
+    (async done
+      (setup-mocks! {"pluginApiToken" "existing-token"
+                     "llmApiKey" "" "llmEndpoint" "" "llmModel" ""})
+      (core/migrate-settings!)
+      (-> (:promise @settings-writer/queue-state)
+          (.then (fn [_]
+                   (is (= "token" (:authMode @updated-settings))
+                       "first run should set authMode to token")
+                   (reset! updated-settings {})
+                   (core/migrate-settings!)
+                   (:promise @settings-writer/queue-state)))
+          (.then (fn [_]
+                   (is (not (contains? @updated-settings :authMode))
+                       "second run should not touch authMode again")
+                   (is (= "token" (aget js/logseq "settings" "authMode"))
+                       "authMode should remain 'token' after second run")
+                   (done)))
+          (.catch (fn [err]
+                    (is false (str "Unexpected error: " err))
+                    (done)))))))
+
 (deftest test-migrate-preserves-default-values-if-intentional
   (testing "migration does NOT overwrite new keys that hold the default value"
     ;; User intentionally has OpenRouter default; old OpenAI endpoint still lingers

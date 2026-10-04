@@ -206,6 +206,20 @@
                      (is (= "Bearer test-token" (get-in opts [:headers :Authorization]))))
                    (done)))))))
 
+(deftest test-send-message-uses-jwt-when-auth-mode-jwt
+  (setup-mocks!)
+  (testing "send-message! sends Authorization: Bearer <jwtToken> when authMode is jwt"
+    (async done
+      (swap! messaging/state assoc :server-url "http://localhost:3000")
+      (aset js/logseq "settings" "authMode" "jwt")
+      (aset js/logseq "settings" "jwtToken" "jwt-send-456")
+      (-> (messaging/send-message! "whatsapp" "15551234567" "Hello!")
+          (.then (fn [_result]
+                   (let [{:keys [opts]} (first @fetch-calls)]
+                     (is (= "Bearer jwt-send-456" (get-in opts [:headers :Authorization]))
+                         "Authorization header should carry the jwtToken, not pluginApiToken"))
+                   (done)))))))
+
 (deftest test-send-message-not-connected
   (setup-mocks!)
   (testing "send-message! rejects when not connected"

@@ -29,11 +29,12 @@
          :onSettingsChanged (fn [_] nil)
          :UI #js {:showMsg (fn [& _] nil)}})
   ;; Mock fetch to capture all outbound callback POSTs.
-  ;; Parses the JSON body and records {url, body} for assertions.
+  ;; Parses the JSON body and records {url, body, authorization} for assertions.
   (set! js/fetch
     (fn [url opts]
-      (let [body (js->clj (js/JSON.parse (.-body opts)) :keywordize-keys true)]
-        (swap! callback-calls conj {:url url :body body}))
+      (let [body (js->clj (js/JSON.parse (.-body opts)) :keywordize-keys true)
+            authorization (aget opts "headers" "Authorization")]
+        (swap! callback-calls conj {:url url :body body :authorization authorization}))
       (js/Promise.resolve #js {:ok true}))))
 
 ;; ---------------------------------------------------------------------------
@@ -141,6 +142,46 @@
             (let [{:keys [url]} (first @callback-calls)]
               (is (= "http://localhost:3000/api/agent/callback" url)
                   "Callback should POST to the configured server URL")))
+          (done))
+        100))))
+
+;; ---------------------------------------------------------------------------
+;; Centralized Auth Tests (FR-4 -- agent_bridge uses auth/get-auth-token)
+;; ---------------------------------------------------------------------------
+
+(deftest test-callback-uses-token-mode-auth-header
+  (setup-mocks!)
+  (testing "callback sends Authorization: Bearer <pluginApiToken> in (default) token mode"
+    (async done
+      (bridge/dispatch-agent-request
+        {"requestId" "req-auth-token"
+         "operation" "list_skills"
+         "params" {}})
+      (js/setTimeout
+        (fn []
+          (is (pos? (count @callback-calls)))
+          (when (pos? (count @callback-calls))
+            (is (= "Bearer test-token" (:authorization (first @callback-calls)))
+                "Authorization header should carry the configured pluginApiToken"))
+          (done))
+        100))))
+
+(deftest test-callback-uses-jwt-mode-auth-header
+  (setup-mocks!)
+  (testing "callback sends Authorization: Bearer <jwtToken> when authMode is jwt"
+    (aset js/logseq "settings" "authMode" "jwt")
+    (aset js/logseq "settings" "jwtToken" "jwt-xyz-456")
+    (async done
+      (bridge/dispatch-agent-request
+        {"requestId" "req-auth-jwt"
+         "operation" "list_skills"
+         "params" {}})
+      (js/setTimeout
+        (fn []
+          (is (pos? (count @callback-calls)))
+          (when (pos? (count @callback-calls))
+            (is (= "Bearer jwt-xyz-456" (:authorization (first @callback-calls)))
+                "Authorization header should carry the configured jwtToken, not pluginApiToken"))
           (done))
         100))))
 

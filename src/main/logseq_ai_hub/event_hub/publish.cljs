@@ -1,19 +1,14 @@
 (ns logseq-ai-hub.event-hub.publish
-  "Publishes events to the server's EventBus via authenticated HTTP.")
-
-(defn- get-server-url []
-  (aget js/logseq "settings" "webhookServerUrl"))
-
-(defn- get-api-token []
-  (aget js/logseq "settings" "pluginApiToken"))
+  "Publishes events to the server's EventBus via authenticated HTTP."
+  (:require [logseq-ai-hub.auth :as auth]))
 
 (defn publish-to-server!
   "Publishes an event to the server's EventBus.
    Fire-and-forget -- logs errors but does not throw.
    Returns Promise<{:event-id string} | nil>."
   [{:keys [type source data metadata]}]
-  (let [server-url (get-server-url)
-        token (get-api-token)]
+  (let [server-url (auth/get-server-url)
+        token (auth/get-auth-token)]
     (if (and server-url token)
       (-> (js/fetch (str server-url "/api/events/publish")
                     (clj->js {:method "POST"

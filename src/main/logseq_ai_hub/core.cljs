@@ -5,6 +5,7 @@
             [logseq-ai-hub.tasks :as tasks]
             [logseq-ai-hub.sub-agents :as sub-agents]
             [logseq-ai-hub.secrets :as secrets]
+            [logseq-ai-hub.auth :as auth]
             [logseq-ai-hub.job-runner.init :as job-runner-init]
             [logseq-ai-hub.agent-bridge :as agent-bridge]
             [logseq-ai-hub.settings-writer :as settings-writer]
@@ -20,10 +21,21 @@
     :title "Webhook Server URL"
     :description "URL of your AI Hub webhook server (e.g. https://your-app.railway.app)"
     :default ""}
+   {:key "authMode"
+    :type "enum"
+    :title "Authentication Mode"
+    :description "How the plugin authenticates with the server. 'token' = shared API token (open-source server), 'jwt' = JSON Web Token (multi-tenant server)."
+    :enumChoices ["token" "jwt"]
+    :default "token"}
    {:key "pluginApiToken"
     :type "string"
     :title "Plugin API Token"
     :description "Shared secret token for authenticating with the webhook server."
+    :default ""}
+   {:key "jwtToken"
+    :type "string"
+    :title "JWT Token"
+    :description "Long-lived JSON Web Token for multi-tenant server authentication. Obtain from the admin dashboard."
     :default ""}
    {:key "memoryEnabled"
     :type "boolean"
@@ -148,7 +160,10 @@
 
 (defn migrate-settings!
   "Migrates old OpenAI-specific settings keys to new provider-agnostic names.
-   Copies values forward only if old key has value and new key is empty/default."
+   Copies values forward only if old key has value and new key is empty/default.
+   Also silently backfills authMode='token' for existing users who already have
+   a pluginApiToken but no authMode yet (FR-6) -- idempotent: once authMode is
+   set (by this migration or by the user), it is never touched again."
   []
   (let [settings js/logseq.settings]
     (doseq [[old-key new-key default-val]
@@ -162,7 +177,15 @@
           (settings-writer/queue-settings-write!
             (fn []
               (js/logseq.updateSettings (clj->js {(keyword new-key) old-val}))
-              (js/console.log (str "Settings migration: " old-key " -> " new-key)))))))))
+              (js/console.log (str "Settings migration: " old-key " -> " new-key)))))))
+    (let [api-token (aget settings "pluginApiToken")
+          current-auth-mode (aget settings "authMode")]
+      (when (and (not (str/blank? api-token))
+                 (str/blank? current-auth-mode))
+        (settings-writer/queue-settings-write!
+          (fn []
+            (js/logseq.updateSettings (clj->js {:authMode "token"}))
+            (js/console.log "Settings migration: authMode -> token")))))))
 
 (defn handle-llm-command [e]
   (let [block-uuid (.-uuid e)]
@@ -188,6 +211,7 @@
   (js/console.log "Loaded Logseq AI Hub Plugin")
   (js/logseq.useSettingsSchema (clj->js settings-schema))
   (migrate-settings!)
+  (auth/log-auth-warnings!)
   (js/logseq.Editor.registerSlashCommand "LLM" handle-llm-command)
   (secrets/init!)
   (secrets/register-commands!)

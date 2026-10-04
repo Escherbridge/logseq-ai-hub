@@ -1,6 +1,7 @@
 (ns logseq-ai-hub.messaging
   (:require [clojure.string :as str]
-            [logseq-ai-hub.agent-bridge :as agent-bridge]))
+            [logseq-ai-hub.agent-bridge :as agent-bridge]
+            [logseq-ai-hub.auth :as auth]))
 
 ;; ---------------------------------------------------------------------------
 ;; State
@@ -144,7 +145,10 @@
       (swap! state assoc :reconnect-attempt attempt)
       (let [timer (js/setTimeout
                     (fn []
-                      (connect! (:server-url @state) (:api-token @state)))
+                      ;; Re-resolve server-url/token fresh (zero-arg connect!) rather than
+                      ;; reusing whatever was cached in state, so a mid-session authMode
+                      ;; switch is picked up on reconnect.
+                      (connect!))
                     backoff)]
         (swap! state assoc :reconnect-timer timer)))))
 
@@ -160,8 +164,10 @@
 
 (defn connect!
   "Connects to the webhook server via SSE.
-   Returns the EventSource instance or nil if params are missing."
-  ([] (connect! (:server-url @state) (:api-token @state)))
+   Returns the EventSource instance or nil if params are missing.
+   Zero-arg form resolves server-url/token fresh via the auth module
+   (picks up authMode changes); the 2-arg form uses the values given."
+  ([] (connect! (auth/get-server-url) (auth/get-auth-token)))
   ([server-url api-token]
    (when (and server-url api-token
               (not (str/blank? server-url))
@@ -206,7 +212,8 @@
   "Sends a message via the webhook server API.
    Returns a Promise resolving to the API response map."
   [platform recipient content]
-  (let [{:keys [server-url api-token]} @state]
+  (let [{:keys [server-url]} @state
+        api-token (auth/get-auth-token)]
     (if (or (str/blank? server-url) (str/blank? api-token))
       (js/Promise.reject (js/Error. "Not connected to server"))
       (-> (js/fetch (str server-url "/api/send")
@@ -238,15 +245,10 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init!
-  "Initializes the messaging module. Reads settings and connects SSE.
+  "Initializes the messaging module. Resolves auth via the auth module and connects SSE.
    Registers the default ingest handler."
   []
-  (let [settings js/logseq.settings
-        server-url (aget settings "webhookServerUrl")
-        api-token (aget settings "pluginApiToken")]
-    (when (and server-url api-token
-               (not (str/blank? server-url))
-               (not (str/blank? api-token)))
-      (on-message ingest-message!)
-      (connect! server-url api-token)
-      (js/console.log "Messaging module initialized"))))
+  (when (auth/auth-configured?)
+    (on-message ingest-message!)
+    (connect! (auth/get-server-url) (auth/get-auth-token))
+    (js/console.log "Messaging module initialized")))

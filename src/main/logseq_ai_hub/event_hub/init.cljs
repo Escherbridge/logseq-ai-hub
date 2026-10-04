@@ -8,22 +8,17 @@
             [logseq-ai-hub.event-hub.graph-watcher :as graph-watcher]
             [logseq-ai-hub.event-hub.commands :as commands]
             [logseq-ai-hub.messaging :as messaging]
-            [logseq-ai-hub.job-runner.runner :as runner]))
+            [logseq-ai-hub.job-runner.runner :as runner]
+            [logseq-ai-hub.auth :as auth]))
 
 (defonce initialized? (atom false))
-
-(defn- get-server-url []
-  (aget js/logseq "settings" "webhookServerUrl"))
-
-(defn- get-api-token []
-  (aget js/logseq "settings" "pluginApiToken"))
 
 (defn- fetch-recent-events
   "Fetches recent events from GET /api/events?limit=10.
    Returns Promise<[event-map ...]>."
   []
-  (let [server-url (get-server-url)
-        token (get-api-token)]
+  (let [server-url (auth/get-server-url)
+        token (auth/get-auth-token)]
     (if (and server-url token)
       (-> (js/fetch (str server-url "/api/events?limit=10")
                     (clj->js {:method "GET"
@@ -38,8 +33,8 @@
   "Fetches unique event sources from GET /api/events?limit=200.
    Extracts distinct :source values. Returns Promise<[source-string ...]>."
   []
-  (let [server-url (get-server-url)
-        token (get-api-token)]
+  (let [server-url (auth/get-server-url)
+        token (auth/get-auth-token)]
     (if (and server-url token)
       (-> (js/fetch (str server-url "/api/events?limit=200")
                     (clj->js {:method "GET"

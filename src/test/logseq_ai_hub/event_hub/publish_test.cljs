@@ -12,20 +12,23 @@
 (defn- setup-mocks!
   "Sets up js/logseq.settings, js/fetch, and js/console.warn mocks.
    Uses set! (not with-redefs) for async safety."
-  [{:keys [server-url token fetch-response]}]
+  [{:keys [server-url token fetch-response auth-mode jwt-token]}]
   (reset! fetch-calls [])
   (reset! warn-calls [])
   (set! js/logseq
     #js {:settings #js {"webhookServerUrl" server-url
-                         "pluginApiToken" token}})
+                         "pluginApiToken" token
+                         "authMode" auth-mode
+                         "jwtToken" jwt-token}})
   (set! js/console.warn
     (fn [& args]
       (swap! warn-calls conj (vec args))))
   (when fetch-response
     (set! js/fetch
       (fn [url opts]
-        (let [body (js->clj (js/JSON.parse (.-body opts)) :keywordize-keys true)]
-          (swap! fetch-calls conj {:url url :body body}))
+        (let [body (js->clj (js/JSON.parse (.-body opts)) :keywordize-keys true)
+              authorization (aget opts "headers" "Authorization")]
+          (swap! fetch-calls conj {:url url :body body :authorization authorization}))
         (js/Promise.resolve
           #js {:json (fn [] (js/Promise.resolve (clj->js fetch-response)))})))))
 
@@ -55,6 +58,25 @@
                      (is (= "plugin" (:source body)))
                      (is (= {:key "value"} (:data body)))
                      (is (= {:severity "info"} (:metadata body))))
+                   (done)))))))
+
+(deftest test-publish-uses-jwt-when-auth-mode-jwt
+  (setup-mocks! {:server-url "http://localhost:3000"
+                 :token "test-token"
+                 :auth-mode "jwt"
+                 :jwt-token "jwt-xyz-789"
+                 :fetch-response {:success true :eventId "evt-jwt-1"}})
+  (testing "publish-to-server! sends Authorization: Bearer <jwtToken> when authMode is jwt"
+    (async done
+      (-> (publish/publish-to-server!
+            {:type "test.event"
+             :source "plugin"
+             :data {:key "value"}})
+          (.then (fn [_result]
+                   (is (= 1 (count @fetch-calls)))
+                   (let [{:keys [authorization]} (first @fetch-calls)]
+                     (is (= "Bearer jwt-xyz-789" authorization)
+                         "Authorization header should carry the jwtToken, not pluginApiToken"))
                    (done)))))))
 
 (deftest test-server-error-logs-warning-returns-nil

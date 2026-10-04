@@ -137,7 +137,7 @@
 - **Description:** Prepare repository for public open-source release. MIT LICENSE file, comprehensive README.md with architecture overview and setup guide, source code secret sanitization, server `.env.example`, full documentation of 52 bridge operations and 80+ MCP tools/10 resources/7 prompts, CONTRIBUTING.md with dev workflow, package.json and manifest.edn metadata cleanup, and GitHub Actions CI workflow for both CLJS and server tests.
 
 ### plugin-dual-auth_20260312 -- Plugin Dual Authentication: Token and JWT Modes
-- **Status:** pending
+- **Status:** completed (2026-10-04)
 - **Type:** feature
 - **Branch:** `track/plugin-dual-auth_20260312`
 - **Priority:** P0
@@ -214,7 +214,7 @@ core-arch (done) ──> job-runner (done) ──> webhook-agent-api (done)
                                         |
                                         v
                               open-source-prep (active)
-                              plugin-dual-auth (pending)
+                              plugin-dual-auth (completed)
                                         |
                                         v
                               proprietary-server-bootstrap (pending)
