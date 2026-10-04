@@ -1,0 +1,6 @@
+uuid
+originalName
+journalDay
+preBlock
+propertiesTextValues
+namespace

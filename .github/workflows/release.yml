@@ -1,0 +1,76 @@
+name: Release
+
+# Builds the plugin and attaches a zip asset to a GitHub Release.
+# Logseq's installer downloads the first .zip asset of releases/latest, and
+# pinned installs look up releases/tags/<package.json version>, so the git tag
+# must equal the bare version in package.json (e.g. tag "0.1.0", not "v0.1.0").
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish plugin zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Resolve version and check it matches the tag
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "$VERSION" ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' does not match package.json version '$VERSION'"
+            exit 1
+          fi
+
+      - name: Build plugin (shadow-cljs release)
+        run: npx shadow-cljs release app
+
+      - name: Assemble plugin package
+        run: |
+          mkdir -p dist
+          cp package.json index.html main.js icon.png README.md LICENSE dist/
+          cd dist && zip -r "../logseq-ai-hub-${{ steps.meta.outputs.version }}.zip" .
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: logseq-ai-hub-${{ steps.meta.outputs.version }}
+          path: logseq-ai-hub-${{ steps.meta.outputs.version }}.zip
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          ASSET="logseq-ai-hub-${VERSION}.zip"
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$VERSION" "$ASSET" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$VERSION" "$ASSET" --repo "$GITHUB_REPOSITORY" \
+              --title "$VERSION" --generate-notes
+          fi

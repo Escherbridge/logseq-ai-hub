@@ -4,6 +4,8 @@
   (:require [logseq-ai-hub.registry.store :as store]
             [logseq-ai-hub.registry.scanner :as scanner]))
 
+(declare bridge-fns) ; defined below; referenced by handle-execute-skill
+
 (defn handle-registry-list
   "Lists all registry entries, optionally filtered by type.
    Params: {\"type\" \"tool|prompt|procedure|agent|skill\" (optional)}

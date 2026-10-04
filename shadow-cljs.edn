@@ -14,6 +14,7 @@
   {:target :browser
    :output-dir "./"
    :modules {:main {:init-fn logseq-ai-hub.core/init}}
+   ;; externs/app.txt (auto-loaded) reserves Logseq entity props Closure would otherwise rename (.uuid)
    }
 
   :node-test {:target :node-test

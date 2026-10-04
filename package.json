@@ -1,6 +1,6 @@
 {
   "name": "logseq-ai-hub",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": false,
   "description": "Transform Logseq into a central orchestration layer for AI workflows, MCP tools, and automated task management",
   "main": "index.html",
@@ -26,7 +26,9 @@
     "shadow-cljs": "2.16.2"
   },
   "logseq": {
-    "id": "logseq-ai-hub"
+    "id": "logseq-ai-hub",
+    "title": "Logseq AI Hub",
+    "icon": "./icon.png"
   },
   "scripts": {
     "watch": "npx shadow-cljs watch app",
