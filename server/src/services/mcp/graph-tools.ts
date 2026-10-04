@@ -46,7 +46,7 @@ export function registerGraphTools(server: McpServer, getContext: () => McpToolC
     {
       name: z.string().describe("Page name"),
       content: z.string().optional().describe("Initial page content"),
-      properties: z.record(z.string()).optional().describe("Page properties as key-value pairs"),
+      properties: z.record(z.string(), z.string()).optional().describe("Page properties as key-value pairs"),
     },
     async (params) => bridgeTool("page_create", params),
   );
@@ -67,7 +67,7 @@ export function registerGraphTools(server: McpServer, getContext: () => McpToolC
     {
       page: z.string().describe("Page name to append to"),
       content: z.string().describe("Block content (markdown)"),
-      properties: z.record(z.string()).optional().describe("Block properties as key-value pairs"),
+      properties: z.record(z.string(), z.string()).optional().describe("Block properties as key-value pairs"),
     },
     async (params) => bridgeTool("block_append", params),
   );

@@ -55,7 +55,7 @@ export function registerCharacterTools(server: McpServer, getContext: () => McpT
       system_prompt: z.string().optional().describe("Personality and behavior instructions"),
       model: z.string().optional().describe("LLM model override"),
       skills: z.array(z.string()).optional().describe("Skill page names this character can use"),
-      metadata: z.record(z.unknown()).optional().describe("Arbitrary metadata (stats, state, etc.)"),
+      metadata: z.record(z.string(), z.unknown()).optional().describe("Arbitrary metadata (stats, state, etc.)"),
     },
     async (params) => {
       try {
@@ -76,7 +76,7 @@ export function registerCharacterTools(server: McpServer, getContext: () => McpT
       system_prompt: z.string().nullable().optional(),
       model: z.string().nullable().optional(),
       skills: z.array(z.string()).optional(),
-      metadata: z.record(z.unknown()).optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
     },
     async ({ id, ...updates }) => {
       const ctx = getContext();
@@ -156,7 +156,7 @@ export function registerCharacterTools(server: McpServer, getContext: () => McpT
     {
       id: z.string().describe("Character ID or name"),
       eventType: z.string().describe("Event type string (e.g. 'npc.attacked', 'quest.completed')"),
-      payload: z.record(z.unknown()).optional().describe("Event payload object"),
+      payload: z.record(z.string(), z.unknown()).optional().describe("Event payload object"),
       source: z.string().optional().describe("Event source"),
       sessionId: z.string().optional().describe("Existing session to continue; creates new if absent"),
     },

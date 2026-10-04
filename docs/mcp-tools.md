@@ -188,8 +188,21 @@ _Source: `pidev-tools.ts`_
 | `pi_agent_get` | Get details of a specific pi.dev agent profile | `name` (string) |
 | `pi_agent_update` | Update properties of a pi.dev agent profile | `name` (string), `model` (string, opt), `description` (string, opt), `project` (string, opt) |
 
-### Event Tools
+### Event Hub Tools
 _Source: `event-tools.ts`_
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `event_publish` | Publish an event to the Event Hub (persisted via EventBus and broadcast over SSE) | `type` (string), `source` (string), `data` (Record), `metadata` (Record, opt) |
+| `event_query` | Query events from the Event Hub with optional filters | `type` (string, opt), `source` (string, opt), `since` (string ISO, opt), `limit` (number, opt), `offset` (number, opt) |
+| `event_subscribe` | Create an event subscription page in Logseq that triggers actions on matching events | `name` (string), `pattern` (string), `action` (enum: log\|route\|skill), `skill` (string, opt), `routeTo` (string, opt), `severityFilter` (string[], opt) |
+| `event_sources` | List unique event sources from the Event Hub | -- |
+| `event_recent` | Get recent events from the Event Hub | `limit` (number, opt) |
+| `webhook_test` | Send a test webhook event to the Event Hub for testing subscriptions and pipelines | `source` (string), `data` (Record, opt) |
+| `http_request` | Make an HTTP request (for agent use). URLs are validated against `HTTP_ALLOWLIST`; HTTPS enforced except for localhost | `url` (string), `method` (string, opt), `headers` (Record<string,string>, opt), `body` (string, opt), `timeout` (number, opt) |
+
+### Character Hub Event Tools
+_Source: `hub-event-tools.ts`_
 
 | Tool | Description | Parameters |
 |------|-------------|------------|

@@ -25,7 +25,7 @@ export function registerJobTools(server: McpServer, getContext: () => McpToolCon
       skill: z.string().optional().describe("Skill to execute"),
       priority: z.number().min(1).max(5).optional().describe("Priority 1-5 (1=highest)"),
       schedule: z.string().optional().describe("Cron schedule (required for scheduled type)"),
-      input: z.record(z.unknown()).optional().describe("Input parameters for the job"),
+      input: z.record(z.string(), z.unknown()).optional().describe("Input parameters for the job"),
     },
     async (params) => bridgeTool("create_job", params),
   );

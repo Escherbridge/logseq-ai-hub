@@ -5,7 +5,7 @@ interface SSEClient {
   controller: ReadableStreamDefaultController;
 }
 
-class SSEManager {
+export class SSEManager {
   private clients: Map<string, SSEClient> = new Map();
   private eventId = 0;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;

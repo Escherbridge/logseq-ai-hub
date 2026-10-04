@@ -5,7 +5,7 @@ import { registerJobTools } from "./job-tools";
 import { registerMemoryTools } from "./memory-tools";
 import { registerMessagingTools } from "./messaging-tools";
 import { registerCharacterTools } from "./character-tools";
-import { registerEventTools } from "./event-tools";
+import { registerHubEventTools } from "./hub-event-tools";
 import { registerCharacterSessionTools } from "./character-session-tools";
 import { registerApprovalTools } from "./approval-tools";
 import { registerRegistryTools } from "./registry-tools";
@@ -30,7 +30,8 @@ export function registerAllMcpHandlers(
   registerMemoryTools(server, getContext);
   registerMessagingTools(server, getContext);
   registerCharacterTools(server, getContext);
-  registerEventTools(server, getContext);
+  // Character hub events + subscriptions (6 tools); distinct from the P9 Event Hub below
+  registerHubEventTools(server, getContext);
   registerCharacterSessionTools(server, getContext);
 
   // P1: Approval operations (1 tool)
