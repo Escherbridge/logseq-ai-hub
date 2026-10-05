@@ -94,9 +94,19 @@
      :completed (count (:completed s))
      :failed (count (:failed s))}))
 
+(def ^:private config-keys
+  #{:max-concurrent :poll-interval-ms :default-timeout-ms :job-prefix :skill-prefix})
+
 (defn update-config!
-  "Updates runner configuration. Merges with existing config."
+  "Updates runner configuration. Merges with existing config.
+   Rejects unknown keys: a plain merge accepts anything, so a renamed key used
+   to add a dead entry beside the real one and the setting silently never applied."
   [config-map]
+  (let [unknown (remove config-keys (keys config-map))]
+    (when (seq unknown)
+      (throw (js/Error. (str "update-config!: unknown config key(s) "
+                             (pr-str (vec unknown))
+                             ". Valid keys: " (pr-str (vec (sort config-keys))))))))
   (swap! runner-state update :config merge config-map))
 
 (defn build-status-map

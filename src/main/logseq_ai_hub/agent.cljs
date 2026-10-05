@@ -1,6 +1,7 @@
 (ns logseq-ai-hub.agent
   (:require [clojure.string :as str]
-            [logseq-ai-hub.llm.settings :as llm-settings]))
+            [logseq-ai-hub.llm.settings :as llm-settings]
+            [logseq-ai-hub.llm.response :as llm-response]))
 
 ;; -----------------------------------------------------------------------------
 ;; Registry
@@ -82,10 +83,15 @@
                         (-> (.text response)
                             (.then (fn [body]
                                      (js/console.error "API response body:" body)
-                                     (throw (js/Error. (str "API " (.-status response) ": " body)))))))))
+                                     ;; Surface only the provider's own message — the raw
+                                     ;; JSON envelope used to land in the user's graph.
+                                     (throw (js/Error.
+                                              (llm-response/error-message (.-status response) body)))))))))
              (.then (fn [data]
-                      (let [msg (-> data .-choices (aget 0) .-message .-content)]
-                        msg)))
+                      (let [{:keys [text error]} (llm-response/extract-text data)]
+                        (if error
+                          (throw (js/Error. error))
+                          text))))
              (.catch (fn [err]
                        (js/console.error "LLM Handler Error:" err)
                        (str "⚠️ **Error calling LLM API**: " (.-message err))))))))))

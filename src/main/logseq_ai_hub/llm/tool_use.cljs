@@ -5,6 +5,7 @@
   (:require [logseq-ai-hub.mcp.client :as mcp-client]
             [logseq-ai-hub.registry.bridge :as registry-bridge]
             [logseq-ai-hub.llm.settings :as llm-settings]
+            [logseq-ai-hub.llm.response :as llm-response]
             [clojure.string :as str]))
 
 (def ^:private max-tool-rounds 10)
@@ -71,7 +72,9 @@
                      (.json response)
                      (-> (.text response)
                          (.then (fn [body-text]
-                                  (throw (js/Error. (str "API " (.-status response) ": " body-text)))))))))
+                                  (throw (js/Error.
+                                           (llm-response/error-message
+                                             (.-status response) body-text)))))))))
           (.then (fn [data]
                    (js->clj data :keywordize-keys true)))))))
 
@@ -152,7 +155,10 @@
    Returns Promise<string> with the final text response."
   [messages openai-tools round]
   (if (>= round max-tool-rounds)
-    (js/Promise.resolve "Error: Maximum tool-calling rounds exceeded.")
+    (js/Promise.resolve
+      (str "⚠️ Stopped after " max-tool-rounds " tool-calling rounds without a final answer. "
+           "The model may be looping — simplify the prompt or reduce the number of "
+           "[[MCP/...]] / [[Skills/...]] refs in this block."))
     (-> (make-api-call messages openai-tools)
         (.then (fn [data]
                  (let [choice (first (:choices data))
@@ -178,8 +184,20 @@
                                           next-messages (into updated-messages tool-messages)]
                                       ;; Recurse
                                       (tool-use-loop next-messages openai-tools (inc round)))))))
-                     ;; Final text response
-                     (js/Promise.resolve (or (:content message) "")))))))))
+                     ;; Final text response. Mirrors llm.response/extract-text, but this
+                     ;; path holds keywordized CLJS maps rather than the raw JS payload.
+                     (js/Promise.resolve
+                       (let [content   (:content message)
+                             reasoning (:reasoning message)]
+                         (cond
+                           (not (str/blank? content)) content
+                           (not (str/blank? reasoning))
+                           (str reasoning
+                                "\n\n> ℹ️ The model returned only its reasoning, no final answer.")
+                           :else
+                           (str "⚠️ The provider returned no usable content"
+                                (when finish-reason (str " (finish_reason: " finish-reason ")"))
+                                ".")))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public Entry Point

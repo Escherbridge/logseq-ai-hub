@@ -38,7 +38,7 @@
   (-> (js/logseq.Editor.getPageBlocksTree page-name)
       (.then (fn [blocks]
                (if-let [[content children] (extract-block-content blocks)]
-                 (parser/parse-job-definition page-name content children)
+                 (parser/parse-job-definition content children page-name)
                  nil)))
       (.catch (fn [err]
                 (js/console.error "Error reading job page:" err)
@@ -51,7 +51,7 @@
   (-> (js/logseq.Editor.getPageBlocksTree page-name)
       (.then (fn [blocks]
                (if-let [[content children] (extract-block-content blocks)]
-                 (parser/parse-skill-definition page-name content children)
+                 (parser/parse-skill-definition content children page-name)
                  nil)))
       (.catch (fn [err]
                 (js/console.error "Error reading skill page:" err)

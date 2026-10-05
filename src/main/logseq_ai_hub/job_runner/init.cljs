@@ -1,6 +1,7 @@
 (ns logseq-ai-hub.job-runner.init
   "Initialization and wiring for the job runner system."
-  (:require [logseq-ai-hub.job-runner.runner :as runner]
+  (:require [logseq-ai-hub.settings :as plugin-settings]
+            [logseq-ai-hub.job-runner.runner :as runner]
             [logseq-ai-hub.job-runner.scheduler :as scheduler]
             [logseq-ai-hub.job-runner.engine :as engine]
             [logseq-ai-hub.job-runner.executor :as executor]
@@ -33,14 +34,13 @@
   "Reads job runner settings from Logseq settings.
   Returns a map with all configuration values."
   []
-  (let [settings js/logseq.settings]
-    {:enabled (or (aget settings "jobRunnerEnabled") false)
-     :max-concurrent (or (aget settings "jobRunnerMaxConcurrent") 3)
-     :poll-interval (or (aget settings "jobRunnerPollInterval") 5000)
-     :default-timeout (or (aget settings "jobRunnerDefaultTimeout") 300000)
-     :job-page-prefix (or (aget settings "jobPagePrefix") "Jobs/")
-     :skill-page-prefix (or (aget settings "skillPagePrefix") "Skills/")
-     :mcp-servers-json (or (aget settings "mcpServers") "[]")}))
+  {:enabled (plugin-settings/flag "jobRunnerEnabled" false)
+   :max-concurrent (plugin-settings/number "jobRunnerMaxConcurrent" 3)
+   :poll-interval (plugin-settings/number "jobRunnerPollInterval" 5000)
+   :default-timeout (plugin-settings/number "jobRunnerDefaultTimeout" 300000)
+   :job-page-prefix (plugin-settings/text "jobPagePrefix" "Jobs/")
+   :skill-page-prefix (plugin-settings/text "skillPagePrefix" "Skills/")
+   :mcp-servers-json (plugin-settings/text "mcpServers" "[]")})
 
 (defn- parse-mcp-servers
   "Parses MCP server configuration from JSON string.
@@ -130,11 +130,12 @@
   "Starts the job runner with configuration from settings."
   [settings]
   (when-not (:runner-started? @system-state)
+    ;; Key names must match what runner.cljs reads; see job_runner/AGENTS.md §config-keys
     (runner/update-config! {:max-concurrent (:max-concurrent settings)
-                           :poll-interval (:poll-interval settings)
-                           :default-timeout (:default-timeout settings)
-                           :job-page-prefix (:job-page-prefix settings)
-                           :skill-page-prefix (:skill-page-prefix settings)})
+                           :poll-interval-ms (:poll-interval settings)
+                           :default-timeout-ms (:default-timeout settings)
+                           :job-prefix (:job-page-prefix settings)
+                           :skill-prefix (:skill-page-prefix settings)})
     (-> (runner/start-runner!)
         (.then (fn [_]
                  (swap! system-state assoc :runner-started? true)

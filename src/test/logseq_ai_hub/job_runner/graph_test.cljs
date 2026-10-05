@@ -46,13 +46,34 @@
 (use-fixtures :each
   {:before setup-logseq-mock!})
 
+;; These assertions must be sensitive to WHICH argument lands WHERE.
+;; `(contains? result :job-id)` was not: :job-id is assoc'd unconditionally, so it
+;; held true even when read-job-page passed (page-name content children) into a fn
+;; whose signature is [first-block-content child-block-contents page-name].
+;; Under that transposition :job-id was the children vector, and :steps was built by
+;; mapping over a STRING (seqable in CLJS) — one junk step per character.
 (deftest test-read-job-page
   (async done
     (-> (graph/read-job-page "Jobs/Test Job")
         (.then (fn [result]
                  (is (some? result) "Should return parsed job definition")
-                 (is (map? result) "Should be a map")
-                 (is (contains? result :job-id) "Should have :job-id key")
+                 (is (= "Jobs/Test Job" (:job-id result))
+                     ":job-id comes from the page-name argument")
+                 (is (= 2 (count (:steps result)))
+                     ":steps comes from the children argument — one step per child block, not per character")
+                 (done)))
+        (.catch (fn [err]
+                  (is false (str "Promise rejected: " err))
+                  (done))))))
+
+(deftest test-read-skill-page-parses-children-as-steps
+  (async done
+    (-> (graph/read-skill-page "Skills/Test Skill")
+        (.then (fn [result]
+                 (is (= "Skills/Test Skill" (:skill-id result))
+                     ":skill-id comes from the page-name argument")
+                 (is (= 1 (count (:steps result)))
+                     "one step per child block")
                  (done)))
         (.catch (fn [err]
                   (is false (str "Promise rejected: " err))

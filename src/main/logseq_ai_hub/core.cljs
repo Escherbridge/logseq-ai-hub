@@ -192,11 +192,21 @@
     (js/console.log "LLM command fired. block:" block-uuid)
     (-> (js/logseq.Editor.getBlock block-uuid)
         (.then (fn [block]
-                 (if block
-                   (do (js/console.log "LLM processing content:" (.-content block))
-                       (enriched/call (.-content block)))
+                 (cond
+                   (nil? block)
                    (do (js/console.error "LLM: block not found for uuid" block-uuid)
-                       (js/Promise.resolve "Error: Could not read block content.")))))
+                       (js/Promise.resolve "⚠️ Could not read this block. Try running /LLM again."))
+
+                   ;; Guard before the request: an empty prompt is rejected by the
+                   ;; provider (400 "Input must have at least 1 token"), which used
+                   ;; to surface as a raw API error pasted into the graph.
+                   (str/blank? (.-content block))
+                   (js/Promise.resolve
+                     "⚠️ Nothing to send — write your prompt in this block, then run /LLM.")
+
+                   :else
+                   (do (js/console.log "LLM processing content:" (.-content block))
+                       (enriched/call (.-content block))))))
         (.then (fn [response]
                  (js/console.log "LLM response received, length:" (count response))
                  (if (and response (not= response ""))
