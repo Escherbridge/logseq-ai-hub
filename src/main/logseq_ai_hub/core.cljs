@@ -6,6 +6,7 @@
             [logseq-ai-hub.sub-agents :as sub-agents]
             [logseq-ai-hub.secrets :as secrets]
             [logseq-ai-hub.auth :as auth]
+            [logseq-ai-hub.doctor :as doctor]
             [logseq-ai-hub.job-runner.init :as job-runner-init]
             [logseq-ai-hub.agent-bridge :as agent-bridge]
             [logseq-ai-hub.settings-writer :as settings-writer]
@@ -145,7 +146,7 @@
    {:key "httpAllowlist"
     :type "string"
     :title "HTTP Allowlist"
-    :description "JSON array of domain patterns allowed for outbound HTTP requests (e.g. [\"api.example.com\", \"*.slack.com\"])."
+    :description "JSON array of domain patterns allowed for outbound HTTP requests, e.g. [\"api.example.com\", \"*.slack.com\"]. NOTE: an empty or unparseable value allows ALL hosts."
     :default "[]"}
    {:key "eventRetentionDays"
     :type "number"
@@ -223,6 +224,9 @@
   (migrate-settings!)
   (auth/log-auth-warnings!)
   (js/logseq.Editor.registerSlashCommand "LLM" handle-llm-command)
+  ;; Always registered, even when subsystems are off — a disabled feature must
+  ;; still be able to say that it is disabled.
+  (doctor/register-commands!)
   (secrets/init!)
   (secrets/register-commands!)
   (messaging/init!)

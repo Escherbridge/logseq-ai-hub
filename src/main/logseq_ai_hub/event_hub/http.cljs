@@ -113,16 +113,31 @@
 ;; Settings Access
 ;; =============================================================================
 
+(defonce ^:private warned-about-bad-allowlist? (atom false))
+
 (defn- get-http-allowlist
   "Reads the httpAllowlist setting (JSON array of domain patterns).
-   Returns a vector of pattern strings, or [] if not configured."
+   Returns a vector of pattern strings, or [] if not configured.
+
+   An unparseable value yields [], which means UNRESTRICTED — a security
+   control that disarms itself on a typo. Until that default is revisited
+   the user is at least told, once per session rather than per request."
   []
   (let [raw (aget js/logseq "settings" "httpAllowlist")]
     (if (and raw (not (str/blank? raw)))
       (try
-        (js->clj (js/JSON.parse raw))
+        (let [parsed (js->clj (js/JSON.parse raw))]
+          (reset! warned-about-bad-allowlist? false)
+          parsed)
         (catch js/Error _
           (js/console.warn "[EventHub/HTTP] Failed to parse httpAllowlist setting")
+          (when-not @warned-about-bad-allowlist?
+            (reset! warned-about-bad-allowlist? true)
+            (js/logseq.App.showMsg
+              (str "HTTP Allowlist is not valid JSON, so outbound HTTP steps are "
+                   "currently UNRESTRICTED. Fix Settings -> 'HTTP Allowlist' "
+                   "(expected: [\"api.example.com\", \"*.slack.com\"]).")
+              "warning"))
           []))
       [])))
 

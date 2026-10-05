@@ -296,6 +296,7 @@ All commands are invoked from the Logseq block editor by typing `/` followed by 
 | Command | Description |
 |---|---|
 | `/LLM` | Send block content to the LLM with dynamic argument parsing. Supports `[[MCP/server]]` refs for tool-use and `[[AI-Memory/tag]]` refs for context injection. |
+| `/ai-hub:doctor` | Check the whole configuration and replace the block with a checklist. Calls the LLM provider and the server for real, so it reports what actually works, not just what is filled in. Start here when something misbehaves. |
 
 ### Memory
 
@@ -427,7 +428,17 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full development guidelines.
 
 ## Troubleshooting
 
-Start with `GET /health` on your server — it reports whether the plugin is linked (`agentApi.pluginConnected`), how many MCP tools are registered, and how many MCP sessions are open.
+**Run `/ai-hub:doctor` first.** It replaces the block with a checklist covering the LLM provider, the server link, every feature flag and every JSON setting — and it exercises them rather than just reading them:
+
+```
+## AI Hub diagnostics
+✅ **LLM** — key sk-or-…e79b accepted by https://openrouter.ai/api/v1 (820ms). Model: anthropic/claude-sonnet-4
+⚠️ **Server** — https://your-app.up.railway.app is healthy but no plugin is linked. Check 'Plugin API Token' matches the server's PLUGIN_API_TOKEN, then reload the plugin.
+⚠️ **Job Runner** — disabled — /job:* will queue jobs that never execute. Enable it, then reload the plugin.
+❌ **HTTP Allowlist** — INVALID JSON — Unexpected end of JSON input — outbound HTTP is UNRESTRICTED until fixed.
+```
+
+You can also check `GET /health` on the server directly — it reports whether a plugin is linked (`agentApi.pluginConnected`), how many MCP tools are registered, and how many MCP sessions are open.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
