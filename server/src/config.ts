@@ -17,6 +17,28 @@ export interface Config {
   webhookSecret: string;
   llmHttpReferer: string;
   llmTitle: string;
+  /** Public origin used to build outbound links (approvals, MCP discovery). "" when unknown. */
+  baseUrl: string;
+}
+
+/**
+ * Public origin for outbound links. BASE_URL wins; otherwise Railway's
+ * RAILWAY_PUBLIC_DOMAIN (injected scheme-less) is promoted to https.
+ * Returns "" when neither is set, so callers keep their localhost fallback.
+ */
+function resolveBaseUrl(): string {
+  const stripTrailingSlashes = (s: string) => s.replace(/\/+$/, "");
+
+  const explicit = (process.env.BASE_URL || "").trim();
+  if (explicit) return stripTrailingSlashes(explicit);
+
+  const railwayDomain = (process.env.RAILWAY_PUBLIC_DOMAIN || "").trim();
+  if (railwayDomain) {
+    const host = stripTrailingSlashes(railwayDomain.replace(/^https?:\/\//, ""));
+    return host ? `https://${host}` : "";
+  }
+
+  return "";
 }
 
 export function loadConfig(): Config {
@@ -46,6 +68,7 @@ export function loadConfig(): Config {
     listLimitMax: Math.max(1, parseInt(process.env.LIST_LIMIT_MAX || "100", 10)),
     llmHttpReferer: process.env.LLM_HTTP_REFERER || "",
     llmTitle: process.env.LLM_TITLE || "",
+    baseUrl: resolveBaseUrl(),
   };
 }
 
