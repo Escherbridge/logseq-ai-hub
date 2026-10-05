@@ -10,13 +10,19 @@ export class SSEManager {
   private eventId = 0;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * Heartbeat keeps the SSE stream from looking idle to an intermediate proxy.
+   * 15s, not 30s: edge proxies commonly close idle connections at 30-60s, so a
+   * 30s beat races the timeout and the plugin link flaps (observed in
+   * production as pluginConnected alternating within seconds).
+   */
   start(): void {
     this.heartbeatInterval = setInterval(() => {
       this.broadcast({
         type: "heartbeat",
         data: { timestamp: new Date().toISOString() },
       });
-    }, 30_000);
+    }, 15_000);
   }
 
   stop(): void {
