@@ -439,3 +439,196 @@ describe("MCP notifications after sync", () => {
     expect(sendToolListChanged).not.toHaveBeenCalled();
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// DynamicRegistry multi-target attach/detach (per-session MCP servers)
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("DynamicRegistry multi-target attach/detach", () => {
+  /**
+   * Invokes a registered tool's real callback directly (the same
+   * `tool.handler` the SDK's CallToolRequest dispatcher would invoke),
+   * proving the tool is actually callable on `server` rather than merely
+   * present as a bookkeeping key.
+   */
+  function callTool(
+    server: McpServer,
+    name: string,
+    args: Record<string, unknown> = {},
+  ): Promise<any> {
+    const tool = getRegisteredTools(server)[name];
+    if (!tool) throw new Error(`Tool ${name} not registered on server`);
+    return tool.handler(args, {});
+  }
+
+  function createExecuteSkillBridge(entries: Record<string, RegistryEntry[]>) {
+    return {
+      isPluginConnected: () => true,
+      sendRequest: mock(async (op: string, params: any) => {
+        if (op === "registry_list") {
+          const type = params.type as string;
+          return {
+            entries: entries[type] ?? [],
+            count: (entries[type] ?? []).length,
+            version: 1,
+          };
+        }
+        if (op === "execute_skill") {
+          // Echo back what the tool handler actually sent, so the test
+          // can assert real argument flow end-to-end rather than just a
+          // fixed stub response.
+          return { skillId: params.skillId, inputsSeen: params.inputs };
+        }
+        return {};
+      }),
+    };
+  }
+
+  test("a tool registered before a server attaches is replayed onto it and is callable on both", async () => {
+    const serverAttachedBefore = createServer();
+    const toolEntry: RegistryEntry = {
+      id: "Skills/replay-me",
+      type: "tool",
+      name: "replay-me",
+      description: "Tool used to prove replay works",
+      handler: "skill",
+      "skill-id": "Skills/replay-me",
+      "input-schema": {
+        type: "object",
+        properties: { note: { type: "string" } },
+      },
+    };
+    const bridge = createExecuteSkillBridge({ tool: [toolEntry] });
+
+    const registry = new DynamicRegistry(serverAttachedBefore, () => ({
+      db: createTestDb(),
+      config: testConfig,
+      bridge: bridge as any,
+    }));
+
+    await registry.syncFromBridge();
+
+    // Attached BEFORE the sync ran — must be callable, not just listed.
+    const resultBefore = await callTool(serverAttachedBefore, "kb_replay-me", {
+      note: "hi",
+    });
+    const payloadBefore = JSON.parse(resultBefore.content[0].text);
+    expect(payloadBefore.skillId).toBe("Skills/replay-me");
+    expect(payloadBefore.inputsSeen).toEqual({ note: "hi" });
+
+    // Attached AFTER the sync already ran — replay must register it too,
+    // and with a working, independently-callable closure (different args
+    // produce a different observable result).
+    const serverAttachedAfter = createServer();
+    registry.attach(serverAttachedAfter);
+
+    const resultAfter = await callTool(serverAttachedAfter, "kb_replay-me", {
+      note: "later",
+    });
+    const payloadAfter = JSON.parse(resultAfter.content[0].text);
+    expect(payloadAfter.skillId).toBe("Skills/replay-me");
+    expect(payloadAfter.inputsSeen).toEqual({ note: "later" });
+  });
+
+  test("detach stops a server from receiving tools registered afterward", async () => {
+    const serverStaysAttached = createServer();
+    const serverDetached = createServer();
+
+    // A bridge whose entry list can change between successive
+    // syncFromBridge() calls, mirroring how the real plugin bridge
+    // reports newly-added registry entries over time.
+    let entries: Record<string, RegistryEntry[]> = {};
+    const bridge = {
+      isPluginConnected: () => true,
+      sendRequest: mock(async (op: string, params: any) => {
+        if (op === "registry_list") {
+          const type = params.type as string;
+          return {
+            entries: entries[type] ?? [],
+            count: (entries[type] ?? []).length,
+            version: 1,
+          };
+        }
+        return {};
+      }),
+    };
+
+    const registry = new DynamicRegistry(serverStaysAttached, () => ({
+      db: createTestDb(),
+      config: testConfig,
+      bridge: bridge as any,
+    }));
+
+    // Attach, then detach, before any tool exists at all — simulating a
+    // session that connected and disconnected before the next poll.
+    registry.attach(serverDetached);
+    registry.detach(serverDetached);
+
+    entries = {
+      tool: [
+        {
+          id: "Skills/after-detach",
+          type: "tool",
+          name: "after-detach",
+          description: "Registered after detach",
+          handler: "skill",
+          "skill-id": "Skills/after-detach",
+        },
+      ],
+    };
+    await registry.syncFromBridge();
+
+    // Mutation check: if detach() were a no-op, serverDetached would
+    // still be in the internal target list and would pick this up too.
+    expect(
+      "kb_after-detach" in getRegisteredTools(serverStaysAttached),
+    ).toBe(true);
+    expect("kb_after-detach" in getRegisteredTools(serverDetached)).toBe(
+      false,
+    );
+  });
+
+  // Regression: registerSkillAsTool declared `inputs` as the zod-3 one-argument
+  // z.record(z.string()). Under zod 4 that schema constructs fine and validates
+  // an OMITTED `inputs`, but throws on any supplied object — so every skill_*
+  // call that actually passed inputs died inside the SDK's argument validation.
+  // Exercising inputSchema is what the protocol does for tools/call; invoking
+  // tool.handler directly skips validation and would not catch this.
+  test("a skill tool validates supplied inputs and forwards them to the bridge", async () => {
+    const server = createServer();
+    const bridge = createExecuteSkillBridge({
+      skill: [
+        {
+          id: "Skills/summarize",
+          type: "skill",
+          name: "summarize",
+          description: "Summarize text",
+        },
+      ],
+    });
+
+    const registry = new DynamicRegistry(server, () => ({
+      db: createTestDb(),
+      config: testConfig,
+      bridge: bridge as any,
+    }));
+    await registry.syncFromBridge();
+
+    const registered = getRegisteredTools(server)["skill_summarize"];
+    expect(registered).toBeTruthy();
+
+    // The schema the SDK validates tools/call arguments against.
+    const parsed = (registered.inputSchema as any).parse({
+      inputs: { topic: "meeting notes" },
+    });
+    expect(parsed.inputs).toEqual({ topic: "meeting notes" });
+
+    // And the validated inputs reach the plugin bridge unchanged.
+    const result = await callTool(server, "skill_summarize", {
+      inputs: { topic: "meeting notes" },
+    });
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.skillId).toBe("Skills/summarize");
+    expect(payload.inputsSeen).toEqual({ topic: "meeting notes" });
+  });
+});

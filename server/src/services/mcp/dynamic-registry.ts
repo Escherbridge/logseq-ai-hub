@@ -109,18 +109,74 @@ export function interpolateTemplate(
 }
 
 /**
- * Manages dynamic MCP tool, prompt, and resource registration
- * based on the plugin-side registry.
+ * Manages dynamic MCP tool, prompt, and resource registration based on the
+ * plugin-side registry. One `DynamicRegistry` is shared across every MCP
+ * session server (see src/routes/AGENTS.md §mcp-session-lifecycle): each
+ * session gets its own `McpServer`, so a single `server.tool(...)` call is
+ * no longer enough — registration must fan out to every attached server,
+ * and a session server attached *after* a sync already ran still needs
+ * everything replayed onto it. `toolBinders`/`promptBinders`/
+ * `resourceBinders` cache the replay closure per entry name; the
+ * `registeredTools`/`registeredPrompts`/`registeredResources` Sets keep
+ * their original job of deduping bridge entries across repeated
+ * `syncFromBridge()` polls.
  */
 export class DynamicRegistry {
   private registeredTools = new Set<string>();
   private registeredPrompts = new Set<string>();
   private registeredResources = new Set<string>();
+  private toolBinders = new Map<string, (server: McpServer) => void>();
+  private promptBinders = new Map<string, (server: McpServer) => void>();
+  private resourceBinders = new Map<string, (server: McpServer) => void>();
+  private servers: McpServer[];
 
   constructor(
-    private server: McpServer,
+    initialServer: McpServer,
     private getContext: () => McpToolContext,
-  ) {}
+  ) {
+    this.servers = [initialServer];
+  }
+
+  /**
+   * Attaches a new session server and replays every previously registered
+   * tool/prompt/resource onto it, so a session that connects after a sync
+   * already ran still sees the full dynamic catalogue.
+   */
+  attach(server: McpServer): void {
+    if (this.servers.includes(server)) return;
+    this.servers.push(server);
+
+    for (const bind of this.toolBinders.values()) {
+      try {
+        bind(server);
+      } catch (err: any) {
+        console.warn("Failed to replay tool onto new session server:", err.message);
+      }
+    }
+    for (const bind of this.promptBinders.values()) {
+      try {
+        bind(server);
+      } catch (err: any) {
+        console.warn("Failed to replay prompt onto new session server:", err.message);
+      }
+    }
+    for (const bind of this.resourceBinders.values()) {
+      try {
+        bind(server);
+      } catch (err: any) {
+        console.warn("Failed to replay resource onto new session server:", err.message);
+      }
+    }
+  }
+
+  /**
+   * Detaches a session server so future syncs/notifications stop
+   * targeting it. Must be called on session teardown or the attached
+   * server list grows unbounded across reconnects.
+   */
+  detach(server: McpServer): void {
+    this.servers = this.servers.filter((s) => s !== server);
+  }
 
   /**
    * Fetches registry data from the plugin via bridge and syncs MCP registrations.
@@ -197,26 +253,33 @@ export class DynamicRegistry {
         if (this.registerDynamicResource(procedure)) resourceCount++;
       }
 
-      // Notify MCP clients if registrations changed (Task 5)
+      // Notify MCP clients if registrations changed (Task 5), on every
+      // attached session server.
       if (this.registeredTools.size > prevToolCount) {
-        try {
-          this.server.sendToolListChanged();
-        } catch {
-          /* no active sessions */
+        for (const server of this.servers) {
+          try {
+            server.sendToolListChanged();
+          } catch {
+            /* no active sessions */
+          }
         }
       }
       if (this.registeredPrompts.size > prevPromptCount) {
-        try {
-          this.server.sendPromptListChanged();
-        } catch {
-          /* no active sessions */
+        for (const server of this.servers) {
+          try {
+            server.sendPromptListChanged();
+          } catch {
+            /* no active sessions */
+          }
         }
       }
       if (this.registeredResources.size > prevResourceCount) {
-        try {
-          this.server.sendResourceListChanged();
-        } catch {
-          /* no active sessions */
+        for (const server of this.servers) {
+          try {
+            server.sendResourceListChanged();
+          } catch {
+            /* no active sessions */
+          }
         }
       }
 
@@ -285,7 +348,7 @@ export class DynamicRegistry {
     const toolName = `kb_${entry.name}`;
     if (this.registeredTools.has(toolName)) return false;
 
-    try {
+    const bind = (server: McpServer) => {
       const description = entry.description || "Knowledge base tool";
 
       // Build real Zod params from input-schema (Task 1)
@@ -293,7 +356,7 @@ export class DynamicRegistry {
         ? jsonSchemaToZodParams(entry["input-schema"] as Record<string, unknown>)
         : {};
 
-      this.server.tool(toolName, description, zodParams, async (args) => {
+      server.tool(toolName, description, zodParams, async (args) => {
         const ctx = this.getContext();
         if (!ctx.bridge?.isPluginConnected()) {
           return {
@@ -326,8 +389,12 @@ export class DynamicRegistry {
           };
         }
       });
+    };
 
+    try {
+      for (const server of this.servers) bind(server);
       this.registeredTools.add(toolName);
+      this.toolBinders.set(toolName, bind);
       return true;
     } catch (err: any) {
       console.warn(
@@ -342,13 +409,13 @@ export class DynamicRegistry {
     const toolName = `skill_${entry.name}`;
     if (this.registeredTools.has(toolName)) return false;
 
-    try {
-      this.server.tool(
+    const bind = (server: McpServer) => {
+      server.tool(
         toolName,
         entry.description || `Execute skill: ${entry.name}`,
         {
           inputs: z
-            .record(z.string())
+            .record(z.string(), z.string())
             .optional()
             .describe("Skill input parameters"),
         },
@@ -390,8 +457,12 @@ export class DynamicRegistry {
           }
         },
       );
+    };
 
+    try {
+      for (const server of this.servers) bind(server);
       this.registeredTools.add(toolName);
+      this.toolBinders.set(toolName, bind);
       return true;
     } catch (err: any) {
       console.warn(
@@ -406,7 +477,7 @@ export class DynamicRegistry {
     const promptName = `kb_${entry.name}`;
     if (this.registeredPrompts.has(promptName)) return false;
 
-    try {
+    const bind = (server: McpServer) => {
       // Build per-argument Zod params (Task 2)
       const argSchema: Record<string, ZodTypeAny> = {};
       const declaredArgs = entry.arguments ?? [];
@@ -425,7 +496,7 @@ export class DynamicRegistry {
           .describe("Arguments for the prompt template");
       }
 
-      this.server.prompt(
+      server.prompt(
         promptName,
         entry.description || `Knowledge base prompt: ${entry.name}`,
         argSchema,
@@ -521,8 +592,12 @@ export class DynamicRegistry {
           }
         },
       );
+    };
 
+    try {
+      for (const server of this.servers) bind(server);
       this.registeredPrompts.add(promptName);
+      this.promptBinders.set(promptName, bind);
       return true;
     } catch (err: any) {
       console.warn(
@@ -537,8 +612,8 @@ export class DynamicRegistry {
     const resourceUri = `logseq://procedures/${entry.name}`;
     if (this.registeredResources.has(resourceUri)) return false;
 
-    try {
-      this.server.resource(
+    const bind = (server: McpServer) => {
+      server.resource(
         `procedure-${entry.name}`,
         resourceUri,
         {
@@ -587,8 +662,12 @@ export class DynamicRegistry {
           }
         },
       );
+    };
 
+    try {
+      for (const server of this.servers) bind(server);
       this.registeredResources.add(resourceUri);
+      this.resourceBinders.set(resourceUri, bind);
       return true;
     } catch (err: any) {
       console.warn(

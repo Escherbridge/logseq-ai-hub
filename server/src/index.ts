@@ -4,7 +4,11 @@ import { createRouter } from "./router";
 import { sseManager } from "./services/sse";
 import { AgentBridge } from "./services/agent-bridge";
 import { SessionStore } from "./services/session-store";
-import { createMcpServer } from "./services/mcp-server";
+import {
+  createMcpServer,
+  createBareMcpServer,
+  registerSessionServerFactory,
+} from "./services/mcp-server";
 import { registerAllMcpHandlers } from "./services/mcp/index";
 import { ApprovalStore } from "./services/approval-store";
 import { DynamicRegistry } from "./services/mcp/dynamic-registry";
@@ -58,6 +62,29 @@ const getContext = () => ({
 });
 registerAllMcpHandlers(mcpServer, getContext);
 dynamicRegistry = new DynamicRegistry(mcpServer, getContext);
+
+// Every MCP session needs its own McpServer instance (the SDK forbids
+// attaching a second transport to an already-connected Protocol) but must
+// still see the full 95-tool static catalogue plus any dynamic KB tools
+// registered so far. This factory builds that per-session server and
+// attaches it to the shared DynamicRegistry so future syncFromBridge()
+// notifications reach it too; mcp-transport.ts calls it per new session
+// and disposes it (detach + close) on teardown.
+registerSessionServerFactory(() => {
+  const sessionServer = createBareMcpServer();
+  registerAllMcpHandlers(sessionServer, getContext);
+  dynamicRegistry.attach(sessionServer);
+
+  return {
+    server: sessionServer,
+    dispose: () => {
+      dynamicRegistry.detach(sessionServer);
+      sessionServer.close().catch(() => {
+        /* transport already closing/closed — nothing to do */
+      });
+    },
+  };
+});
 
 const router = createRouter({ config, db, agentBridge, sessionStore, approvalStore, eventBus });
 

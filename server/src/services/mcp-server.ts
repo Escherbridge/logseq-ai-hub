@@ -2,8 +2,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpSessionInfo } from "../types/mcp";
 
 /**
- * Singleton McpServer instance. Created once at startup;
- * tools, resources, and prompts are registered on it by other modules.
+ * Shared server identity/capabilities. See src/routes/AGENTS.md
+ * §mcp-session-lifecycle for why both the status-template singleton and
+ * every per-session server below are built from this same shape.
+ */
+const SERVER_INFO = { name: "logseq-ai-hub", version: "1.0.0" };
+const SERVER_OPTIONS = {
+  capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
+};
+
+/**
+ * Singleton McpServer instance. Created once at startup; tools, resources,
+ * and prompts are registered on it by other modules. It is never
+ * `.connect()`-ed to a transport — it exists purely as the registration
+ * template for `createBareMcpServer()` callers and as the status/health
+ * source of truth (`getMcpStatus()`).
  */
 let mcpServer: McpServer | null = null;
 
@@ -20,20 +33,7 @@ let activeSessions = 0;
 export function createMcpServer(): McpServer {
   if (mcpServer) return mcpServer;
 
-  mcpServer = new McpServer(
-    {
-      name: "logseq-ai-hub",
-      version: "1.0.0",
-    },
-    {
-      capabilities: {
-        tools: {},
-        resources: {},
-        prompts: {},
-        logging: {},
-      },
-    },
-  );
+  mcpServer = new McpServer(SERVER_INFO, SERVER_OPTIONS);
 
   return mcpServer;
 }
@@ -43,6 +43,51 @@ export function createMcpServer(): McpServer {
  */
 export function getMcpServer(): McpServer | null {
   return mcpServer;
+}
+
+/**
+ * Builds a brand-new (non-singleton) McpServer with the same identity and
+ * capabilities as the template. Each MCP session needs its own instance:
+ * the SDK's `Protocol.connect()` throws if a transport is already attached
+ * to a server, so one shared server cannot serve multiple concurrent
+ * sessions. Callers are responsible for registering handlers on the
+ * returned instance before connecting it to a transport.
+ */
+export function createBareMcpServer(): McpServer {
+  return new McpServer(SERVER_INFO, SERVER_OPTIONS);
+}
+
+/**
+ * A fully-registered per-session server plus its teardown hook. This
+ * module only owns the *shape* of a session server — what "fully
+ * registered" means (static tool handlers, dynamic registry attachment)
+ * is supplied by whoever calls `registerSessionServerFactory` (index.ts).
+ */
+export interface SessionServer {
+  server: McpServer;
+  dispose: () => void;
+}
+
+let sessionServerFactory: (() => SessionServer) | null = null;
+
+/**
+ * Installs the factory used to build a new per-session McpServer. Called
+ * once at startup (index.ts) after the singleton template has been fully
+ * registered, so the factory can replay that same registration onto each
+ * session server it builds.
+ */
+export function registerSessionServerFactory(
+  factory: () => SessionServer,
+): void {
+  sessionServerFactory = factory;
+}
+
+/**
+ * Builds one new session server via the installed factory, or returns
+ * null if no factory has been registered yet (e.g. server not started).
+ */
+export function createSessionServer(): SessionServer | null {
+  return sessionServerFactory ? sessionServerFactory() : null;
 }
 
 /**
