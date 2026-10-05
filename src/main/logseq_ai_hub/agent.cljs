@@ -1,5 +1,6 @@
 (ns logseq-ai-hub.agent
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [logseq-ai-hub.llm.settings :as llm-settings]))
 
 ;; -----------------------------------------------------------------------------
 ;; Registry
@@ -57,21 +58,16 @@
    (make-llm-handler nil))
   ([system-prompt]
    (fn [input _model-id]
-     (let [settings js/logseq.settings
-           api-key (aget settings "llmApiKey")
-           endpoint (aget settings "llmEndpoint")
-           model-name (or (aget settings "llmModel") "anthropic/claude-sonnet-4")
-           url (str (if (str/ends-with? endpoint "/")
-                      (subs endpoint 0 (dec (count endpoint)))
-                      endpoint)
-                    "/chat/completions")
+     (let [api-key (llm-settings/api-key)
+           model-name (llm-settings/model)
+           url (llm-settings/chat-completions-url)
            messages (cond-> []
                       (not (str/blank? system-prompt))
                       (conj {:role "system" :content system-prompt})
                       true
                       (conj {:role "user" :content input}))]
 
-       (if (str/blank? api-key)
+       (if (nil? api-key)
          (js/Promise.resolve "⚠️ **Error**: LLM API Key is missing. Please check Plugin Settings.")
          (-> (js/fetch url
                        (clj->js {:method "POST"

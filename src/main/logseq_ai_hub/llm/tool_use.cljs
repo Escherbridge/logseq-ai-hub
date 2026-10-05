@@ -4,6 +4,7 @@
    and routes tool calls back to the correct MCP server."
   (:require [logseq-ai-hub.mcp.client :as mcp-client]
             [logseq-ai-hub.registry.bridge :as registry-bridge]
+            [logseq-ai-hub.llm.settings :as llm-settings]
             [clojure.string :as str]))
 
 (def ^:private max-tool-rounds 10)
@@ -52,18 +53,13 @@
   "Makes a single call to the chat/completions API.
    Returns Promise<parsed-response-map>."
   [messages openai-tools]
-  (let [settings js/logseq.settings
-        api-key (aget settings "llmApiKey")
-        endpoint (aget settings "llmEndpoint")
-        model-name (or (aget settings "llmModel") "anthropic/claude-sonnet-4")
-        url (str (if (str/ends-with? endpoint "/")
-                   (subs endpoint 0 (dec (count endpoint)))
-                   endpoint)
-                 "/chat/completions")
+  (let [api-key (llm-settings/api-key)
+        model-name (llm-settings/model)
+        url (llm-settings/chat-completions-url)
         body (cond-> {:model model-name
                       :messages messages}
                (seq openai-tools) (assoc :tools openai-tools))]
-    (if (str/blank? api-key)
+    (if (nil? api-key)
       (js/Promise.reject (js/Error. "LLM API Key is missing. Check Plugin Settings."))
       (-> (js/fetch url
             (clj->js {:method "POST"
