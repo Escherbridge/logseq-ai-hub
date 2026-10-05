@@ -3,26 +3,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerResources } from "../src/services/mcp/resources";
 import { registerPrompts } from "../src/services/mcp/prompts";
 import { registerAllMcpHandlers } from "../src/services/mcp/index";
-import { createTestDb } from "./helpers";
+import { createTestDb, makeTestConfig } from "./helpers";
 import type { Config } from "../src/config";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-  sessionMessageLimit: 50,
-  eventRetentionDays: 30,
-  httpAllowlist: [],
-  listLimitMax: 100,
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(

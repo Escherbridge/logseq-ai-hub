@@ -2,27 +2,12 @@ import { describe, test, expect, beforeEach, mock } from "bun:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Database } from "bun:sqlite";
 import { registerEventTools } from "../src/services/mcp/event-tools";
-import { createTestDb } from "./helpers";
+import { createTestDb, makeTestConfig } from "./helpers";
 import { EventBus } from "../src/services/event-bus";
 import type { Config } from "../src/config";
 import type { McpToolContext } from "../src/types/mcp";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-  sessionMessageLimit: 50,
-  eventRetentionDays: 30,
-  httpAllowlist: [],
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(
@@ -223,7 +208,7 @@ describe("registerEventTools", () => {
     });
 
     test("includes routeTo property when action is route", async () => {
-      const sendRequest = mock(async () => ({ ok: true }));
+      const sendRequest = mock(async (_op: string, _params: any) => ({ ok: true }));
       const mockBridge = {
         isPluginConnected: () => true,
         sendRequest,

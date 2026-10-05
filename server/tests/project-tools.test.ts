@@ -2,21 +2,9 @@ import { describe, test, expect, mock } from "bun:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerProjectTools } from "../src/services/mcp/project-tools";
 import type { Config } from "../src/config";
-import { createTestDb } from "./helpers";
+import { createTestDb, makeTestConfig } from "./helpers";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(

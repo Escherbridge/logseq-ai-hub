@@ -7,23 +7,11 @@ import {
   interpolateTemplate,
   type RegistryEntry,
 } from "../src/services/mcp/dynamic-registry";
-import { createTestDb } from "./helpers";
+import { createTestDb, makeTestConfig } from "./helpers";
 import { z } from "zod";
 import type { Config } from "../src/config";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(

@@ -7,20 +7,9 @@ import {
   handleAskApproval,
 } from "../src/routes/api/approvals";
 import type { Config } from "../src/config";
+import { makeTestConfig } from "./helpers";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const testConfig: Config = makeTestConfig();
 
 function authReq(method = "GET", body?: any): Request {
   const init: RequestInit = {

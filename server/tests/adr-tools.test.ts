@@ -2,21 +2,9 @@ import { describe, test, expect, mock } from "bun:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAdrTools } from "../src/services/mcp/adr-tools";
 import type { Config } from "../src/config";
-import { createTestDb } from "./helpers";
+import { createTestDb, makeTestConfig } from "./helpers";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(
@@ -122,7 +110,7 @@ describe("registerAdrTools", () => {
 
   test("adr_list calls bridge.sendRequest with 'adr_list' operation", async () => {
     const server = createServer();
-    const sendRequest = mock(async () => ({ adrs: [], count: 0 }));
+    const sendRequest = mock(async (_op: string, _params: Record<string, unknown>) => ({ adrs: [], count: 0 }));
     const mockBridge = {
       isPluginConnected: () => true,
       sendRequest,
@@ -140,7 +128,7 @@ describe("registerAdrTools", () => {
 
   test("adr_create calls bridge.sendRequest with 'adr_create' operation", async () => {
     const server = createServer();
-    const sendRequest = mock(async () => ({ adr: { number: 1, title: "Use SSE bridge" } }));
+    const sendRequest = mock(async (_op: string, _params: Record<string, unknown>) => ({ adr: { number: 1, title: "Use SSE bridge" } }));
     const mockBridge = {
       isPluginConnected: () => true,
       sendRequest,

@@ -1,9 +1,10 @@
 import { describe, test, expect, beforeEach, mock } from "bun:test";
-import { Database } from "bun:sqlite";
+import { Database, type SQLQueryBindings } from "bun:sqlite";
 import type { HubEvent } from "../src/types";
 import type { RouteContext } from "../src/router";
 import type { Config } from "../src/config";
 import { initializeSchema } from "../src/db/schema";
+import { makeTestConfig } from "./helpers";
 
 // -- Inline event store functions (same pattern as event-bus.test.ts) --
 
@@ -27,7 +28,7 @@ function queryEvents(
   opts: { type?: string; source?: string; since?: string; limit?: number; offset?: number }
 ): { events: HubEvent[]; total: number } {
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
 
   if (opts.type) { conditions.push("type = ?"); params.push(opts.type); }
   if (opts.source) { conditions.push("source = ?"); params.push(opts.source); }
@@ -63,7 +64,7 @@ function pruneEvents(db: Database, retentionDays: number): number {
 
 function countEvents(db: Database, opts?: { type?: string; source?: string }): number {
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
   if (opts?.type) { conditions.push("type = ?"); params.push(opts.type); }
   if (opts?.source) { conditions.push("source = ?"); params.push(opts.source); }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -90,22 +91,7 @@ const { handlePublishEvent, handleQueryEvents } = await import("../src/routes/ap
 const TEST_TOKEN = "test-api-token";
 
 function createTestConfig(): Config {
-  return {
-    port: 3000,
-    whatsappVerifyToken: "",
-    whatsappAccessToken: "",
-    whatsappPhoneNumberId: "",
-    telegramBotToken: "",
-    pluginApiToken: TEST_TOKEN,
-    databasePath: ":memory:",
-    llmApiKey: "",
-    llmEndpoint: "",
-    agentModel: "",
-    agentRequestTimeout: 30000,
-    sessionMessageLimit: 50,
-    eventRetentionDays: 30,
-    httpAllowlist: [],
-  };
+  return makeTestConfig({ pluginApiToken: TEST_TOKEN });
 }
 
 function createTestDb(): Database {

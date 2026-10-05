@@ -57,3 +57,20 @@ jobs:
 
       - name: Run tests
         run: cd server && bun test
+
+  typecheck:
+    name: Server Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: cd server && bun install
+
+      - name: Run typecheck
+        run: cd server && bunx tsc --noEmit

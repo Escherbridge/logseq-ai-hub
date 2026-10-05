@@ -2,6 +2,40 @@ import { Database } from "bun:sqlite";
 import { initializeSchema } from "../src/db/schema";
 import { createSession, addSessionMessage } from "../src/db/sessions";
 import type { Session, SessionContext, SessionMessage } from "../src/types/session";
+import type { Config } from "../src/config";
+
+/**
+ * Complete, inert Config for tests. Pass overrides for the fields a given
+ * test actually cares about -- every other field gets a safe default, so
+ * adding a field to Config breaks this one factory instead of every test
+ * file that hand-rolls a Config literal.
+ */
+export function makeTestConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    port: 3000,
+    whatsappVerifyToken: "",
+    whatsappAccessToken: "",
+    whatsappPhoneNumberId: "",
+    telegramBotToken: "",
+    pluginApiToken: "test-token",
+    databasePath: ":memory:",
+    llmApiKey: "",
+    llmEndpoint: "",
+    agentModel: "",
+    agentRequestTimeout: 30000,
+    sessionMessageLimit: 50,
+    eventRetentionDays: 30,
+    httpAllowlist: [],
+    listLimitMax: 100,
+    webhookSecret: "",
+    llmHttpReferer: "",
+    llmTitle: "",
+    // "" so callers fall back to their own http://localhost:${port} default
+    // (see tests/mcp-transport.test.ts, which asserts exactly that fallback).
+    baseUrl: "",
+    ...overrides,
+  };
+}
 
 export function createTestDb(): Database {
   const db = new Database(":memory:");

@@ -2,22 +2,10 @@ import { describe, test, expect, beforeEach, mock } from "bun:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerSafeguardTools } from "../src/services/mcp/safeguard-tools";
 import type { McpToolContext } from "../src/types/mcp";
-import { createTestDb } from "./helpers";
+import { createTestDb, makeTestConfig } from "./helpers";
 import type { Config } from "../src/config";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(
@@ -112,7 +100,7 @@ describe("registerSafeguardTools", () => {
 
   test("safeguard_audit_log calls bridge.sendRequest with correct operation and params", async () => {
     const server = createServer();
-    const sendRequest = mock(async () => ({ entries: [] }));
+    const sendRequest = mock(async (_op: string, _params: Record<string, unknown>) => ({ entries: [] }));
     const mockBridge = {
       isPluginConnected: () => true,
       sendRequest,
@@ -242,7 +230,7 @@ describe("registerSafeguardTools", () => {
     const server = createServer();
     const getPolicy = mock(async () => ({ level: 1, rules: [], contact: null }));
     const mockSafeguardService = { getPolicy } as any;
-    const sendRequest = mock(async () => ({ updated: true }));
+    const sendRequest = mock(async (_op: string, _params: Record<string, unknown>) => ({ updated: true }));
     const mockBridge = {
       isPluginConnected: () => true,
       sendRequest,

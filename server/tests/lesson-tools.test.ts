@@ -2,22 +2,10 @@ import { describe, test, expect, mock } from "bun:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerLessonTools } from "../src/services/mcp/lesson-tools";
 import type { McpToolContext } from "../src/types/mcp";
-import { createTestDb } from "./helpers";
+import { createTestDb, makeTestConfig } from "./helpers";
 import type { Config } from "../src/config";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(
@@ -106,7 +94,7 @@ describe("registerLessonTools", () => {
 
   test("lesson_store calls bridge.sendRequest with correct operation and params", async () => {
     const server = createServer();
-    const sendRequest = mock(async () => ({ id: "lesson-1", stored: true }));
+    const sendRequest = mock(async (_op: string, _params: Record<string, unknown>) => ({ id: "lesson-1", stored: true }));
     const mockBridge = {
       isPluginConnected: () => true,
       sendRequest,
@@ -133,7 +121,7 @@ describe("registerLessonTools", () => {
 
   test("lesson_search calls bridge.sendRequest with correct operation and params", async () => {
     const server = createServer();
-    const sendRequest = mock(async () => ({ lessons: [], count: 0 }));
+    const sendRequest = mock(async (_op: string, _params: Record<string, unknown>) => ({ lessons: [], count: 0 }));
     const mockBridge = {
       isPluginConnected: () => true,
       sendRequest,

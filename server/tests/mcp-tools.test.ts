@@ -4,22 +4,10 @@ import { registerGraphTools } from "../src/services/mcp/graph-tools";
 import { registerJobTools } from "../src/services/mcp/job-tools";
 import { registerMemoryTools } from "../src/services/mcp/memory-tools";
 import { registerMessagingTools } from "../src/services/mcp/messaging-tools";
-import { createTestDb, seedTestContact } from "./helpers";
+import { createTestDb, seedTestContact, makeTestConfig } from "./helpers";
 import type { Config } from "../src/config";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(

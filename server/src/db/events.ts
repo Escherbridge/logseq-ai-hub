@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database, type SQLQueryBindings } from "bun:sqlite";
 import type { HubEvent } from "../types";
 
 export function insertEvent(db: Database, event: HubEvent): HubEvent {
@@ -31,7 +31,7 @@ export function queryEvents(
   opts: QueryEventsOpts = {}
 ): { events: HubEvent[]; total: number } {
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
 
   if (opts.type) {
     conditions.push("type = ?");
@@ -90,7 +90,7 @@ export function countEvents(
   opts?: { type?: string; source?: string }
 ): number {
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
 
   if (opts?.type) {
     conditions.push("type = ?");

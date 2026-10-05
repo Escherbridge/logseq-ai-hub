@@ -21,6 +21,9 @@ export async function handleTelegramWebhook(
   }
 
   const msg = update.message;
+  // Re-read the full chain (rather than msg.text) so TS keeps the
+  // non-undefined narrowing established by the guard above.
+  const text = update.message.text;
   const userId = String(msg.from.id);
   const displayName = [msg.from.first_name, msg.from.last_name]
     .filter(Boolean)
@@ -33,7 +36,7 @@ export async function handleTelegramWebhook(
     contactId: contact.id,
     platform: "telegram",
     direction: "incoming",
-    content: msg.text,
+    content: text,
     mediaType: "text",
     status: "received",
     rawPayload: JSON.stringify(body),
@@ -63,7 +66,7 @@ export async function handleTelegramWebhook(
 
     // Check for pending approval correlation after message storage
     if (approvalStore) {
-      await checkAndResolveApproval(approvalStore, contact.id, msg.text, createSendFollowUp(config));
+      await checkAndResolveApproval(approvalStore, contact.id, text, createSendFollowUp(config));
     }
   }
 

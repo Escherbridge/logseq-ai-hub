@@ -1,19 +1,8 @@
 import { describe, test, expect } from "bun:test";
 import { authenticate, unauthorizedResponse } from "../src/middleware/auth";
+import { makeTestConfig } from "./helpers";
 
-const config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const config = makeTestConfig();
 
 describe("authenticate", () => {
   test("valid token", () => {

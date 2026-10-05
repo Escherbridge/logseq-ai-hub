@@ -2,24 +2,12 @@ import { describe, test, expect, beforeEach } from "bun:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerSessionTools } from "../src/services/mcp/session-tools";
 import { SessionStore } from "../src/services/session-store";
-import { createTestDb, seedTestSession, seedTestSessionMessage } from "./helpers";
+import { createTestDb, seedTestSession, seedTestSessionMessage, makeTestConfig } from "./helpers";
 import type { Config } from "../src/config";
 import type { McpToolContext } from "../src/types/mcp";
 import { Database } from "bun:sqlite";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(

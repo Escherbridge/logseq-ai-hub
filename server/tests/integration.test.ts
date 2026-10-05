@@ -5,6 +5,7 @@ import { createRouter } from "../src/router";
 import { sseManager } from "../src/services/sse";
 import { initializeSchema } from "../src/db/schema";
 import type { Config } from "../src/config";
+import { makeTestConfig } from "./helpers";
 
 /**
  * Integration test: full flow through the server.
@@ -14,15 +15,14 @@ import type { Config } from "../src/config";
  * 3. POST /api/send → outgoing message stored (external API mocked by test token)
  */
 
-const TEST_CONFIG: Config = {
+const TEST_CONFIG: Config = makeTestConfig({
   port: 0, // unused in these tests
   whatsappVerifyToken: "test-verify",
   whatsappAccessToken: "test-wa-token",
   whatsappPhoneNumberId: "123456",
   telegramBotToken: "test-tg-token",
   pluginApiToken: "test-api-token",
-  databasePath: ":memory:",
-};
+});
 
 function makeWhatsAppPayload(messageId: string, from: string, text: string) {
   return {

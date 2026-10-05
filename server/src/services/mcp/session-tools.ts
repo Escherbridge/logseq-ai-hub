@@ -11,6 +11,19 @@ function ok(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
 }
 
+/**
+ * Working memory entries over MCP only carry key/value; addedAt and source
+ * are server-stamped here so every entry satisfies WorkingMemoryEntry before
+ * it reaches mergeSessionContext/addWorkingMemory, which both assume addedAt
+ * is already present (used for LRU eviction ordering).
+ */
+const workingMemoryInputSchema = z
+  .array(z.object({ key: z.string(), value: z.string() }))
+  .optional()
+  .transform((entries) =>
+    entries?.map((entry) => ({ ...entry, addedAt: new Date().toISOString(), source: "manual" as const }))
+  );
+
 export function registerSessionTools(server: McpServer, getContext: () => McpToolContext): void {
   const getStore = () => {
     const ctx = getContext();
@@ -31,7 +44,7 @@ export function registerSessionTools(server: McpServer, getContext: () => McpToo
         .object({
           focus: z.string().optional(),
           relevant_pages: z.array(z.string()).optional(),
-          working_memory: z.array(z.object({ key: z.string(), value: z.string() })).optional(),
+          working_memory: workingMemoryInputSchema,
         })
         .optional()
         .describe("Initial session context"),
@@ -94,7 +107,7 @@ export function registerSessionTools(server: McpServer, getContext: () => McpToo
         .object({
           focus: z.string().optional(),
           relevant_pages: z.array(z.string()).optional(),
-          working_memory: z.array(z.object({ key: z.string(), value: z.string() })).optional(),
+          working_memory: workingMemoryInputSchema,
           preferences: z
             .object({
               verbosity: z.enum(["concise", "normal", "verbose"]).optional(),

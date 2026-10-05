@@ -1,39 +1,39 @@
 import { describe, test, expect, beforeEach, mock, type Mock } from "bun:test";
 import { Database } from "bun:sqlite";
-import { createTestDb, seedTestSession, seedTestSessionMessage } from "./helpers";
+import { createTestDb, seedTestSession, seedTestSessionMessage, makeTestConfig } from "./helpers";
 import { SessionStore } from "../src/services/session-store";
 import { handleAgentChat } from "../src/routes/api/agent-chat";
 import type { Config } from "../src/config";
 import type { AgentBridge } from "../src/services/agent-bridge";
+import type { ChatMessage, LLMResponse } from "../src/services/llm";
 
 // ---------------------------------------------------------------------------
-// Mock the LLM module so we never hit a real API
+// Mock the LLM module so we never hit a real API. Typed with the real
+// chatCompletion signature/return shape (as a tuple, so the delegating
+// wrapper below can spread into it) so later .mockImplementation calls
+// (which vary toolCalls between a real array and undefined) still type-check.
 // ---------------------------------------------------------------------------
-const mockChatCompletion = mock(() =>
-  Promise.resolve({ content: "Hello from LLM", toolCalls: undefined })
+type ChatCompletionArgs = [ChatMessage[], any[] | undefined, Config, string?];
+
+const mockChatCompletion = mock(
+  (..._args: ChatCompletionArgs): Promise<LLMResponse> =>
+    Promise.resolve({ content: "Hello from LLM", toolCalls: undefined })
 );
 
 mock.module("../src/services/llm", () => ({
-  chatCompletion: (...args: any[]) => mockChatCompletion(...args),
+  chatCompletion: (...args: ChatCompletionArgs) => mockChatCompletion(...args),
 }));
 
 // ---------------------------------------------------------------------------
 // Shared test config
 // ---------------------------------------------------------------------------
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
+const testConfig: Config = makeTestConfig({
   llmApiKey: "test-key",
   llmEndpoint: "https://test.api/v1",
   agentModel: "test-model",
   agentRequestTimeout: 5000,
   sessionMessageLimit: 50,
-};
+});
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, mock } from "bun:test";
-import { Database } from "bun:sqlite";
+import { Database, type SQLQueryBindings } from "bun:sqlite";
 import type { HubEvent } from "../src/types";
 import { initializeSchema } from "../src/db/schema";
 
@@ -26,7 +26,7 @@ function queryEvents(
   opts: { type?: string; source?: string; since?: string; limit?: number; offset?: number }
 ): { events: HubEvent[]; total: number } {
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
 
   if (opts.type) {
     conditions.push("type = ?");
@@ -71,7 +71,7 @@ function pruneEvents(db: Database, retentionDays: number): number {
 
 function countEvents(db: Database, opts?: { type?: string; source?: string }): number {
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
   if (opts?.type) {
     conditions.push("type = ?");
     params.push(opts.type);

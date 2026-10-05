@@ -1,22 +1,10 @@
 import { describe, test, expect, mock } from "bun:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerPiDevTools } from "../src/services/mcp/pidev-tools";
-import { createTestDb } from "./helpers";
+import { createTestDb, makeTestConfig } from "./helpers";
 import type { Config } from "../src/config";
 
-const testConfig: Config = {
-  port: 3000,
-  whatsappVerifyToken: "",
-  whatsappAccessToken: "",
-  whatsappPhoneNumberId: "",
-  telegramBotToken: "",
-  pluginApiToken: "test-token",
-  databasePath: ":memory:",
-  llmApiKey: "",
-  llmEndpoint: "",
-  agentModel: "",
-  agentRequestTimeout: 30000,
-};
+const testConfig: Config = makeTestConfig();
 
 function createServer(): McpServer {
   return new McpServer(
@@ -181,7 +169,7 @@ describe("registerPiDevTools", () => {
   test("pi_agent_list calls bridge.sendRequest", async () => {
     const server = createServer();
     const manager = createMockPiDevManager();
-    const sendRequest = mock(async () => ({ agents: [], count: 0 }));
+    const sendRequest = mock(async (_op: string, _params: Record<string, unknown>) => ({ agents: [], count: 0 }));
     const mockBridge = { isPluginConnected: () => true, sendRequest, pendingCount: 0 } as any;
     registerPiDevTools(server, () => ({
       bridge: mockBridge,
@@ -200,7 +188,7 @@ describe("registerPiDevTools", () => {
   test("pi_agent_create calls bridge.sendRequest", async () => {
     const server = createServer();
     const manager = createMockPiDevManager();
-    const sendRequest = mock(async () => ({ page: "PI-Agents/test", created: true }));
+    const sendRequest = mock(async (_op: string, _params: Record<string, unknown>) => ({ page: "PI-Agents/test", created: true }));
     const mockBridge = { isPluginConnected: () => true, sendRequest, pendingCount: 0 } as any;
     registerPiDevTools(server, () => ({
       bridge: mockBridge,
@@ -237,7 +225,7 @@ describe("registerPiDevTools", () => {
   test("pi_agent_update calls bridge.sendRequest", async () => {
     const server = createServer();
     const manager = createMockPiDevManager();
-    const sendRequest = mock(async () => ({ name: "test", updated: true }));
+    const sendRequest = mock(async (_op: string, _params: Record<string, unknown>) => ({ name: "test", updated: true }));
     const mockBridge = { isPluginConnected: () => true, sendRequest, pendingCount: 0 } as any;
     registerPiDevTools(server, () => ({
       bridge: mockBridge,
