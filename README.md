@@ -18,6 +18,7 @@ Transform Logseq into a central orchestration layer for AI workflows, MCP tools,
 - [MCP Integration](#mcp-integration)
 - [Slash Commands](#slash-commands)
 - [Development](#development)
+- [Troubleshooting](#troubleshooting)
 - [Documentation](#documentation)
 - [License](#license)
 
@@ -421,6 +422,28 @@ logseq-ai-hub/
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full development guidelines.
+
+---
+
+## Troubleshooting
+
+Start with `GET /health` on your server — it reports whether the plugin is linked (`agentApi.pluginConnected`), how many MCP tools are registered, and how many MCP sessions are open.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `/LLM` inserts **"Error: Empty response from model."** | A reasoning model spent its whole token budget on `reasoning` and returned `content: null`, so there was no final answer to show. | The plugin now surfaces the reasoning text and flags truncated replies. If it persists, shorten the prompt or pick a non-reasoning model in **LLM Model Name**. |
+| `/LLM` reports **401 "Missing Authentication header"** | The API key has leading or trailing whitespace, so the header became `Bearer  sk-…`. | Keys are trimmed automatically now. If it persists, the key itself is wrong or revoked — check **LLM API Key**. |
+| `/LLM` inserts a raw `{"error": …}` blob | The provider rejected the request (bad model name, no credit, empty prompt). | The provider's own message is now surfaced instead of the envelope. Running `/LLM` on an empty block no longer calls the provider at all. |
+| Code changes don't take effect | `main.js` is a build artifact; Logseq runs whatever is on disk. | `npm run verify:fresh` fails when `main.js` is older than `src/main/`. Rebuild with `npx shadow-cljs release app`. |
+| Slash commands do nothing in a release build but work in dev | Advanced compilation renamed a Logseq entity property. | Add the property name to `externs/app.txt`. `.uuid` is already covered — without it, every command breaks. |
+| Jobs stay `queued` forever | The Job Runner is disabled by default. | Enable **Enable Job Runner** in settings, then reload the plugin. Feature flags are read once at load. |
+| Job Runner settings seem ignored | — | Poll Interval, Default Timeout and the page prefixes are applied as of this release. Clearing a numeric field falls back to its default rather than disabling the runner. |
+| `/ai-memory:*` commands don't appear | Commands register only when **Enable AI Memory** is on. | Enable it, then reload the plugin. |
+| An MCP client works once, then every reconnect fails | Fixed: the server used one MCP instance for all sessions, so only the first ever connected. | Update the server. Verify with two consecutive `initialize` calls — both should return 200 with different `mcp-session-id` values. |
+| Approval links point at `localhost` | `BASE_URL` is unset and the server can't know its own public origin. | Set `BASE_URL`, or deploy on Railway where `RAILWAY_PUBLIC_DOMAIN` is used automatically. |
+| `/health` shows `pluginConnected: false` | The plugin has no SSE link to the server. | Check **Webhook Server URL** and that **Plugin API Token** matches the server's `PLUGIN_API_TOKEN`, then reload the plugin. |
+
+Plugin-side logs go to the Logseq developer console (**Ctrl/Cmd+Shift+I**). Server-side, check your host's logs for the startup line `Logseq AI Hub server running on port …`.
 
 ---
 
