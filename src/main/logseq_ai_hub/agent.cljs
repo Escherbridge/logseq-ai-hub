@@ -24,9 +24,16 @@
 ;; Dispatch
 ;; -----------------------------------------------------------------------------
 
-(defn default-handler [input _model-id]
-  (js/Promise.resolve
-   (str "🤖 **AI Agent (Unknown Model)**: " input " ... [Processed by Default]")))
+(defn default-handler
+  "Fallback for an unregistered model id -- rejects instead of echoing the
+   input back as a fabricated AI response, so a misconfigured model setting
+   surfaces as an error the user can act on."
+  [_input model-id]
+  (js/Promise.reject
+   (js/Error.
+    (str "Unknown AI model \"" model-id "\". Check the setting that supplied this id "
+         "(e.g. Settings -> 'LLM Model'). Registered models: "
+         (str/join ", " (sort (keys @models))) "."))))
 
 (defn process-input
   "Dispatches input to the registered model handler based on model-id.

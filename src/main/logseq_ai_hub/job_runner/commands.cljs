@@ -1,6 +1,7 @@
 (ns logseq-ai-hub.job-runner.commands
   "Slash command handlers for job runner functionality."
   (:require [logseq-ai-hub.job-runner.runner :as runner]
+            [logseq-ai-hub.settings :as plugin-settings]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -66,15 +67,26 @@
 
 (defn handle-job-run
   "Handler for /job:run slash command.
-  Enqueues a job from the block content."
+  Enqueues a job from the block content. The /job:* commands are registered
+  unconditionally, but the engine only runs when Settings -> 'Enable Job
+  Runner' is on -- so a successful enqueue must still tell the user when
+  nothing will actually pick the job up."
   [e]
   (let [block-uuid (.-uuid e)]
     (-> (get-block-content block-uuid)
         (.then (fn [job-name]
                  (runner/enqueue-job! job-name)))
         (.then (fn [result]
-                 (show-msg (str "Job enqueued: " (:job-id result))
-                          :status "success")))
+                 (let [job-id (:job-id result)
+                       runner-enabled? (plugin-settings/flag "jobRunnerEnabled" false)]
+                   (if runner-enabled?
+                     (show-msg (str "Job enqueued: " job-id)
+                              :status "success")
+                     (show-msg
+                       (str "Job enqueued: " job-id
+                            " -- but the Job Runner is OFF (Settings -> 'Enable Job Runner'). "
+                            "Turn it on and reload the plugin, or this job will sit queued forever.")
+                       :status "warning")))))
         (.catch (fn [err]
                   (js/console.error "job:run error:" err)
                   (show-msg (str "Error: " (.-message err))

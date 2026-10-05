@@ -71,47 +71,60 @@
 
 (defn handle-event-recent
   "Handler for event:recent slash command.
-   Fetches recent events via *fetch-recent-fn* and inserts a table block."
+   Fetches recent events via *fetch-recent-fn* and inserts a table block.
+   wire-dynamic-vars! always sets *fetch-recent-fn* whenever the Event Hub is
+   enabled (the only path these commands get registered on), so there is no
+   live 'not connected' state to guard here -- the fetch is unconditional,
+   and a real failure (bad server, blank config, non-2xx) surfaces as an
+   error block instead of silently rendering as an empty table."
   [e]
   (let [block-uuid (.-uuid e)]
-    (if *fetch-recent-fn*
-      (-> (*fetch-recent-fn*)
-          (.then (fn [events]
-                   (let [content (format-recent-events events)]
-                     (js/logseq.Editor.insertBlock
-                       block-uuid content
-                       (clj->js {:sibling false})))))
-          (.catch (fn [err]
-                    (js/logseq.Editor.insertBlock
-                      block-uuid (str "Error fetching recent events: " (.-message err))
-                      (clj->js {:sibling false})))))
-      (js/logseq.Editor.insertBlock
-        block-uuid "Event fetching not available (server not connected)"
-        (clj->js {:sibling false})))))
+    (-> (*fetch-recent-fn*)
+        (.then (fn [events]
+                 (let [content (format-recent-events events)]
+                   (js/logseq.Editor.insertBlock
+                     block-uuid content
+                     (clj->js {:sibling false})))))
+        (.catch (fn [err]
+                  (js/logseq.Editor.insertBlock
+                    block-uuid (str "Error fetching recent events: " (.-message err))
+                    (clj->js {:sibling false})))))))
 
 (defn handle-event-sources
   "Handler for event:sources slash command.
-   Fetches active sources via *fetch-sources-fn* and inserts a list block."
+   Fetches active sources via *fetch-sources-fn* and inserts a list block.
+   See handle-event-recent -- same unconditional-fetch reasoning applies."
   [e]
   (let [block-uuid (.-uuid e)]
-    (if *fetch-sources-fn*
-      (-> (*fetch-sources-fn*)
-          (.then (fn [sources]
-                   (let [content (format-sources sources)]
-                     (js/logseq.Editor.insertBlock
-                       block-uuid content
-                       (clj->js {:sibling false})))))
-          (.catch (fn [err]
-                    (js/logseq.Editor.insertBlock
-                      block-uuid (str "Error fetching sources: " (.-message err))
-                      (clj->js {:sibling false})))))
-      (js/logseq.Editor.insertBlock
-        block-uuid "Source fetching not available (server not connected)"
-        (clj->js {:sibling false})))))
+    (-> (*fetch-sources-fn*)
+        (.then (fn [sources]
+                 (let [content (format-sources sources)]
+                   (js/logseq.Editor.insertBlock
+                     block-uuid content
+                     (clj->js {:sibling false})))))
+        (.catch (fn [err]
+                  (js/logseq.Editor.insertBlock
+                    block-uuid (str "Error fetching sources: " (.-message err))
+                    (clj->js {:sibling false})))))))
+
+(defn- publish-failure-message
+  "Builds an actionable message for a failed publish -- never a fabricated
+   event id. Names the setting (or server) the user needs to fix."
+  [{:keys [reason detail]}]
+  (str "Test event NOT published ("
+       (case reason
+         :no-server "no server configured"
+         :unauthorized "unauthorized"
+         :unreachable "server unreachable"
+         :rejected "server rejected the event"
+         "unknown error")
+       "): " (or detail "no further detail available")))
 
 (defn handle-event-test
   "Handler for event:test slash command.
-   Publishes a test event via *publish-fn* and inserts a confirmation block."
+   Publishes a test event via *publish-fn* and inserts a confirmation block.
+   Distinguishes a real publish from every failure mode (unconfigured,
+   unauthorized, unreachable, rejected) -- never fabricates an event id."
   [e]
   (let [block-uuid (.-uuid e)]
     (if *publish-fn*
@@ -120,10 +133,11 @@
                          :data {:triggered-by "user"}
                          :metadata {:severity "info"}})
           (.then (fn [result]
-                   (let [event-id (or (:event-id result) "unknown")]
+                   (let [content (if (:ok result)
+                                   (str "Test event published (id: " (:event-id result) ")")
+                                   (publish-failure-message result))]
                      (js/logseq.Editor.insertBlock
-                       block-uuid
-                       (str "Test event published (id: " event-id ")")
+                       block-uuid content
                        (clj->js {:sibling false})))))
           (.catch (fn [err]
                     (js/logseq.Editor.insertBlock

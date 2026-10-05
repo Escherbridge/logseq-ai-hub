@@ -156,6 +156,23 @@
                        (is (= "mock-model" (:model-id call))))
                      (done))))))))
 
+(deftest test-execute-step-ai-process-defaults-to-llm-model
+  (setup-mocks!)
+  (testing "execute-step :ai-process routes to the real llm-model by default, not the mock echo, when selectedModel is unset"
+    ;; selectedModel is not a declared settings-schema field, so it is always
+    ;; nil/absent for a live user -- simulate that instead of the explicit
+    ;; "mock-model" the shared mock settings provide.
+    (set! (.-settings js/logseq) #js {})
+    (async done
+      (let [step {:action :ai-process}
+            input "Hello AI"]
+        (-> (tasks/execute-step step input)
+            (.then (fn [_]
+                     (is (= 1 (count @process-input-calls)))
+                     (is (= "llm-model" (:model-id (first @process-input-calls)))
+                         "must default to the real LLM handler, not the mock/echo model")
+                     (done))))))))
+
 (deftest test-execute-step-send-message
   (setup-mocks!)
   (testing "execute-step with :send-message calls messaging/send-message!"

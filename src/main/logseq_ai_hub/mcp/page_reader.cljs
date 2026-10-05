@@ -53,4 +53,4 @@
     (-> (js/Promise.resolve (js/logseq.DB.datascriptQuery query))
         (.then (fn [results]
                  (let [pages (js->clj results :keywordize-keys true)]
-                   (mapv (fn [[page-info]] (:block/original-name page-info)) pages)))))))
+                   (mapv (fn [[page-info]] (:original-name page-info)) pages)))))))

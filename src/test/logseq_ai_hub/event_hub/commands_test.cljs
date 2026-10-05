@@ -83,15 +83,6 @@
                     (is false (str "Promise rejected: " err))
                     (done)))))))
 
-(deftest test-event-recent-no-fn
-  (setup-mocks!)
-  (testing "event:recent inserts fallback when *fetch-recent-fn* is nil"
-    (commands/handle-event-recent (make-event "block-3"))
-    ;; insertBlock is called synchronously when *fetch-recent-fn* is nil
-    (is (= 1 (count @insert-calls)))
-    (let [{:keys [content]} (first @insert-calls)]
-      (is (str/includes? content "not available")))))
-
 (deftest test-event-recent-error
   (setup-mocks!)
   (testing "event:recent handles fetch error gracefully"
@@ -148,14 +139,6 @@
                     (is false (str "Promise rejected: " err))
                     (done)))))))
 
-(deftest test-event-sources-no-fn
-  (setup-mocks!)
-  (testing "event:sources inserts fallback when *fetch-sources-fn* is nil"
-    (commands/handle-event-sources (make-event "block-src3"))
-    (is (= 1 (count @insert-calls)))
-    (let [{:keys [content]} (first @insert-calls)]
-      (is (str/includes? content "not available")))))
-
 ;; ---------------------------------------------------------------------------
 ;; event:test Tests
 ;; ---------------------------------------------------------------------------
@@ -167,7 +150,7 @@
       (set! commands/*publish-fn*
         (fn [event-map]
           (swap! publish-calls conj event-map)
-          (js/Promise.resolve {:event-id "evt-test-123"})))
+          (js/Promise.resolve {:ok true :event-id "evt-test-123"})))
       (async done
         (-> (commands/handle-event-test (make-event "block-test"))
             (.then (fn [_]
@@ -206,6 +189,48 @@
                    (is (= 1 (count @insert-calls)))
                    (let [{:keys [content]} (first @insert-calls)]
                      (is (str/includes? content "Error")))
+                   (done)))
+          (.catch (fn [err]
+                    (is false (str "Promise rejected: " err))
+                    (done)))))))
+
+(deftest test-event-test-unconfigured-names-setting-not-fake-id
+  (setup-mocks!)
+  (testing "event:test on an unconfigured server never fabricates an id -- names the setting instead"
+    (set! commands/*publish-fn*
+      (fn [_]
+        (js/Promise.resolve
+          {:ok false :reason :no-server
+           :detail "Set Settings -> 'Webhook Server URL' and 'Plugin API Token' first."})))
+    (async done
+      (-> (commands/handle-event-test (make-event "block-test-unconf"))
+          (.then (fn [_]
+                   (is (= 1 (count @insert-calls)))
+                   (let [{:keys [content]} (first @insert-calls)]
+                     (is (not (str/includes? content "unknown"))
+                         "must never fabricate an event id for a failed publish")
+                     (is (str/includes? content "Webhook Server URL")
+                         "must name the setting the user needs to fix"))
+                   (done)))
+          (.catch (fn [err]
+                    (is false (str "Promise rejected: " err))
+                    (done)))))))
+
+(deftest test-event-test-unauthorized-names-token-setting-not-fake-id
+  (setup-mocks!)
+  (testing "event:test on a 401/403 names the Plugin API Token setting, not a fabricated id"
+    (set! commands/*publish-fn*
+      (fn [_]
+        (js/Promise.resolve
+          {:ok false :reason :unauthorized
+           :detail (str "Server responded 401 -- the Plugin API Token does not match "
+                        "the server's PLUGIN_API_TOKEN. Check Settings -> 'Plugin API Token'.")})))
+    (async done
+      (-> (commands/handle-event-test (make-event "block-test-401"))
+          (.then (fn [_]
+                   (let [{:keys [content]} (first @insert-calls)]
+                     (is (not (str/includes? content "unknown")))
+                     (is (str/includes? content "Plugin API Token")))
                    (done)))
           (.catch (fn [err]
                     (is false (str "Promise rejected: " err))

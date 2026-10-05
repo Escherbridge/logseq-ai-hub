@@ -305,8 +305,8 @@
     (-> (js/logseq.DB.datascriptQuery query)
         (.then (fn [results]
                  (let [converted (js->clj results :keywordize-keys true)
-                       pages (mapv (fn [r] {:name (:block/name (first r))
-                                            :originalName (:block/original-name (first r))})
+                       pages (mapv (fn [r] {:name (:name (first r))
+                                            :originalName (:original-name (first r))})
                                    converted)]
                    {:pages (take limit pages)
                     :total (count pages)}))))))
@@ -370,8 +370,8 @@
           (.then (fn [blocks]
                    {:query query
                     :results (mapv (fn [b]
-                                     {:content (:block/content b)
-                                      :page (:block/page b)})
+                                     {:content (:content b)
+                                      :page (:page b)})
                                    blocks)
                     :count (count blocks)}))))))
 
@@ -384,7 +384,7 @@
         (.then (fn [results]
                  (let [converted (js->clj results :keywordize-keys true)
                        tags (mapv (fn [r]
-                                    (let [full-name (:block/name (first r))
+                                    (let [full-name (:name (first r))
                                           tag (subs full-name (count prefix))]
                                       {:tag tag :page full-name}))
                                   converted)]

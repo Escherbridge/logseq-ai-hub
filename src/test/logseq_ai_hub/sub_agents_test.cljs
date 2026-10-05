@@ -177,10 +177,10 @@
             (fn [query]
               (swap! datalog-queries conj query)
               (js/Promise.resolve
-                (clj->js [[{"block/name" "meeting facilitator"
-                             "block/original-name" "Meeting Facilitator"}]
-                           [{"block/name" "code reviewer"
-                             "block/original-name" "Code Reviewer"}]]))))
+                (clj->js [[{"name" "meeting facilitator"
+                             "original-name" "Meeting Facilitator"}]
+                           [{"name" "code reviewer"
+                             "original-name" "Code Reviewer"}]]))))
       (-> (sub-agents/scan-agent-pages!)
           (.then (fn [pages]
                    (is (= 2 (count pages)))
@@ -214,8 +214,8 @@
             (fn [query]
               (swap! datalog-queries conj query)
               (js/Promise.resolve
-                (clj->js [[{"block/name" "test assistant"
-                             "block/original-name" "Test Assistant"}]]))))
+                (clj->js [[{"name" "test assistant"
+                             "original-name" "Test Assistant"}]]))))
       (-> (sub-agents/refresh-agents!)
           (.then (fn [n]
                    (is (= 1 n))
@@ -238,8 +238,8 @@
               (fn [query]
                 (swap! datalog-queries conj query)
                 (js/Promise.resolve
-                  (clj->js [[{"block/name" "existing agent"
-                               "block/original-name" "Existing Agent"}]]))))
+                  (clj->js [[{"name" "existing agent"
+                               "original-name" "Existing Agent"}]]))))
         (-> (sub-agents/refresh-agents!)
             (.then (fn [n]
                      (is (= 0 n) "should not register duplicates")
@@ -346,8 +346,8 @@
             (fn [query]
               (swap! datalog-queries conj query)
               (js/Promise.resolve
-                (clj->js [[{"block/name" "existing bot"
-                             "block/original-name" "Existing Bot"}]]))))
+                (clj->js [[{"name" "existing bot"
+                             "original-name" "Existing Bot"}]]))))
       (-> (sub-agents/init!)
           (.then (fn [_]
                    ;; Should have scanned (at least one datalog query)

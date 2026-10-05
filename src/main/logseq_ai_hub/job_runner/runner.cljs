@@ -143,7 +143,8 @@
                    (enqueue-fn (:queue @runner-state) queue-entry)
                    (emit-lifecycle-event! "job.created" job-id
                                           {:priority (:priority queue-entry)})
-                   (graph-update-job-status! job-id "queued")))))
+                   (-> (graph-update-job-status! job-id "queued")
+                       (.then (fn [_] {:job-id job-id :status "queued"})))))))
       (.catch (fn [err]
                 (js/console.error "Failed to enqueue job:" err)
                 (js/Promise.reject err)))))

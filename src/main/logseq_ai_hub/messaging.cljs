@@ -15,7 +15,10 @@
          :message-handlers []
          :intentional-disconnect? false
          :reconnect-attempt 0
-         :reconnect-timer nil}))
+         :reconnect-timer nil
+         ;; event-type -> handler-fn, replayed onto every EventSource by
+         ;; connect! -- see register-listener!
+         :extra-listeners {}}))
 
 ;; ---------------------------------------------------------------------------
 ;; Pure Helpers (public for testability)
@@ -186,6 +189,12 @@
                               (handle-sse-event event-type (.-data e)))))
        ;; Register agent request handler
        (agent-bridge/register-agent-handler! es)
+       ;; Replay custom listeners registered via register-listener! (e.g.
+       ;; event-hub's hub_event) onto THIS new EventSource -- a plain
+       ;; es.addEventListener bound to the previous instance would otherwise
+       ;; die silently on every reconnect (see register-listener! below).
+       (doseq [[event-type handler-fn] (:extra-listeners @state)]
+         (.addEventListener es event-type (fn [e] (handler-fn e))))
        ;; Error handler with reconnection
        (set! (.-onerror es)
              (fn [_e]
@@ -239,6 +248,17 @@
   "Returns the current EventSource instance, or nil if not connected."
   []
   (:event-source @state))
+
+(defn register-listener!
+  "Registers a handler for a custom SSE event type (beyond the built-in
+   new_message/message_sent/connected/heartbeat set). Attaches immediately
+   to the live EventSource if one is connected, AND is replayed onto every
+   EventSource connect! creates afterwards -- so, unlike a raw
+   es.addEventListener call, the handler survives reconnects."
+  [event-type handler-fn]
+  (swap! state update :extra-listeners assoc event-type handler-fn)
+  (when-let [es (:event-source @state)]
+    (.addEventListener es event-type (fn [e] (handler-fn e)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Init

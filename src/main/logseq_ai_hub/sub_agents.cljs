@@ -71,9 +71,9 @@
                    (let [converted (js->clj results :keywordize-keys true)]
                      (mapv (fn [r]
                              (let [page (first r)]
-                               {:page-name (:block/name page)
-                                :original-name (or (:block/original-name page)
-                                                   (:block/name page))}))
+                               {:page-name (:name page)
+                                :original-name (or (:original-name page)
+                                                   (:name page))}))
                            converted))
                    [])))
         (.catch (fn [err]

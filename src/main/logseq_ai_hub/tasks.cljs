@@ -46,9 +46,12 @@
   (let [{:keys [action]} step]
     (case action
       :ai-process
+      ;; selectedModel is not a declared settings-schema field, so it is
+      ;; always nil for a live user -- default to the real LLM handler, not
+      ;; the mock/echo model.
       (let [model-id (aget js/logseq.settings "selectedModel")
             content (if (string? input) input (str input))]
-        (agent/process-input content (or model-id "mock-model")))
+        (agent/process-input content (or model-id "llm-model")))
 
       :send-message
       (let [{:keys [platform recipient content]} input]

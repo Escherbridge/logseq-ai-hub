@@ -71,7 +71,7 @@
                    (js/Promise.all
                      (clj->js
                        (for [[page-info] pages]
-                         (read-job-page (:block/original-name page-info))))))))
+                         (read-job-page (:original-name page-info))))))))
         (.then (fn [job-defs]
                  (vec (filter some? (js->clj job-defs))))))))
 
@@ -89,7 +89,7 @@
                    (js/Promise.all
                      (clj->js
                        (for [[page-info] pages]
-                         (read-skill-page (:block/original-name page-info))))))))
+                         (read-skill-page (:original-name page-info))))))))
         (.then (fn [skill-defs]
                  (vec (filter some? (js->clj skill-defs))))))))
 

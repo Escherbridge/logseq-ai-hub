@@ -15,36 +15,45 @@
 
 (defn- fetch-recent-events
   "Fetches recent events from GET /api/events?limit=10.
-   Returns Promise<[event-map ...]>."
+   Returns Promise<[event-map ...]>; REJECTS (never silently resolves [])
+   when the server is unconfigured or responds with a non-2xx status, so a
+   real failure can never render as 'No recent events'."
   []
-  (let [server-url (auth/get-server-url)
-        token (auth/get-auth-token)]
-    (if (and server-url token)
-      (-> (js/fetch (str server-url "/api/events?limit=10")
-                    (clj->js {:method "GET"
-                              :headers {"Authorization" (str "Bearer " token)}}))
-          (.then (fn [res] (.json res)))
-          (.then (fn [json]
-                   (let [result (js->clj json :keywordize-keys true)]
-                     (or (:events result) [])))))
-      (js/Promise.resolve []))))
+  (if (auth/auth-configured?)
+    (-> (js/fetch (str (auth/get-server-url) "/api/events?limit=10")
+                  (clj->js {:method "GET"
+                            :headers {"Authorization" (str "Bearer " (auth/get-auth-token))}}))
+        (.then (fn [res]
+                 (if (.-ok res)
+                   (.json res)
+                   (throw (js/Error. (str "Server responded with HTTP " (.-status res)
+                                          " while fetching recent events."))))))
+        (.then (fn [json]
+                 (let [result (js->clj json :keywordize-keys true)]
+                   (or (:events result) [])))))
+    (js/Promise.reject
+      (js/Error. "Event server not configured -- set Settings -> 'Webhook Server URL' and 'Plugin API Token' first."))))
 
 (defn- fetch-event-sources
   "Fetches unique event sources from GET /api/events?limit=200.
-   Extracts distinct :source values. Returns Promise<[source-string ...]>."
+   Extracts distinct :source values. Returns Promise<[source-string ...]>;
+   rejects on missing config or a non-2xx response (see fetch-recent-events)."
   []
-  (let [server-url (auth/get-server-url)
-        token (auth/get-auth-token)]
-    (if (and server-url token)
-      (-> (js/fetch (str server-url "/api/events?limit=200")
-                    (clj->js {:method "GET"
-                              :headers {"Authorization" (str "Bearer " token)}}))
-          (.then (fn [res] (.json res)))
-          (.then (fn [json]
-                   (let [result (js->clj json :keywordize-keys true)
-                         events (or (:events result) [])]
-                     (vec (distinct (keep :source events)))))))
-      (js/Promise.resolve []))))
+  (if (auth/auth-configured?)
+    (-> (js/fetch (str (auth/get-server-url) "/api/events?limit=200")
+                  (clj->js {:method "GET"
+                            :headers {"Authorization" (str "Bearer " (auth/get-auth-token))}}))
+        (.then (fn [res]
+                 (if (.-ok res)
+                   (.json res)
+                   (throw (js/Error. (str "Server responded with HTTP " (.-status res)
+                                          " while fetching event sources."))))))
+        (.then (fn [json]
+                 (let [result (js->clj json :keywordize-keys true)
+                       events (or (:events result) [])]
+                   (vec (distinct (keep :source events)))))))
+    (js/Promise.reject
+      (js/Error. "Event server not configured -- set Settings -> 'Webhook Server URL' and 'Plugin API Token' first."))))
 
 (defn- wire-dynamic-vars!
   "Wires dispatcher dynamic vars to actual implementations."
@@ -59,14 +68,16 @@
   (set! commands/*fetch-sources-fn* fetch-event-sources))
 
 (defn- register-sse-listener!
-  "Registers the hub_event SSE listener on the current EventSource.
-   Does NOT modify messaging.cljs doseq -- attaches directly."
+  "Registers the hub_event listener through messaging's listener registry
+   (messaging/register-listener!), not a raw es.addEventListener bound to
+   the current EventSource -- a direct attach dies silently on the next SSE
+   reconnect (messaging/connect! builds a brand new EventSource every time),
+   so event automations would stop firing after any sleep/blip/redeploy."
   []
-  (when-let [es (messaging/get-event-source)]
-    (.addEventListener es "hub_event"
-      (fn [e]
-        (dispatcher/handle-hub-event-sse (.-data e))))
-    (js/console.log "[EventHub] SSE listener registered")))
+  (messaging/register-listener! "hub_event"
+    (fn [e]
+      (dispatcher/handle-hub-event-sse (.-data e))))
+  (js/console.log "[EventHub] SSE listener registered"))
 
 (defn init!
   "Initializes the Event Hub system.

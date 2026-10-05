@@ -94,10 +94,10 @@
       (set! js/logseq
             #js {:DB #js {:datascriptQuery
                           (fn [_query]
-                            #js [#js [#js {"block/name" "mcp/brave-search"
-                                          "block/original-name" "MCP/brave-search"}]
-                                 #js [#js {"block/name" "mcp/github"
-                                          "block/original-name" "MCP/github"}]])}
+                            #js [#js [#js {"name" "mcp/brave-search"
+                                          "original-name" "MCP/brave-search"}]
+                                 #js [#js {"name" "mcp/github"
+                                          "original-name" "MCP/github"}]])}
                  :Editor #js {}
                  :settings #js {}})
       (-> (page-reader/scan-mcp-pages)

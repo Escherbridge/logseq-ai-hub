@@ -23,13 +23,18 @@
                      (done))))))))
 
 (deftest test-process-input-fallback
-  (testing "process-input falls back to default-handler for unknown model"
+  (testing "process-input rejects (never fabricates a reply) for an unregistered model id"
     (async done
       (-> (agent/process-input "test" "unknown-model-xyz")
-          (.then (fn [result]
-                   (is (string? result))
-                   (is (.includes result "test"))
-                   (done)))))))
+          (.then (fn [_]
+                   (is false "process-input must reject for an unregistered model, not echo a fake reply")
+                   (done)))
+          (.catch (fn [err]
+                    (is (.includes (.-message err) "unknown-model-xyz")
+                        "the error must name the bad model id")
+                    (is (.includes (.-message err) "llm-model")
+                        "the error must list a real registered model so the user can fix the setting")
+                    (done)))))))
 
 (deftest test-echo-handler
   (testing "echo-handler returns string containing input"

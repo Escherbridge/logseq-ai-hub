@@ -125,7 +125,7 @@
             (.then (fn [results]
                      (if (and results (pos? (.-length results)))
                        (let [converted   (js->clj results :keywordize-keys true)
-                             page-names  (mapv (fn [r] (:block/name (first r))) converted)
+                             page-names  (mapv (fn [r] (:name (first r))) converted)
                              ;; Apply project/category filters on page name
                              filtered    (cond->> page-names
                                            (and project (not (str/blank? project)))

@@ -125,7 +125,7 @@
                      (if results
                        (let [converted (js->clj results :keywordize-keys true)
                              page-names (mapv (fn [result]
-                                                (get (first result) :block/name))
+                                                (get (first result) :name))
                                               converted)]
                          ;; Delete each page
                          (js/Promise.all
@@ -201,7 +201,7 @@
                    (-> (retrieve-memories query)
                        (.then (fn [results]
                                 (if (seq results)
-                                  (let [blocks-to-insert (clj->js (mapv (fn [b] {:content (:block/content b)}) results))]
+                                  (let [blocks-to-insert (clj->js (mapv (fn [b] {:content (:content b)}) results))]
                                     (js/logseq.Editor.insertBatchBlock block-uuid blocks-to-insert #js {:sibling false}))
                                   (js/logseq.App.showMsg "No memories matching query" :info))))
                        (.catch (fn [err]
@@ -222,7 +222,7 @@
         (.then (fn [results]
                  (if (and results (pos? (.-length results)))
                    (let [converted (js->clj results :keywordize-keys true)
-                         page-names (mapv (fn [result] (:block/name (first result))) converted)
+                         page-names (mapv (fn [result] (:name (first result))) converted)
                          blocks-to-insert (clj->js (mapv (fn [pn] {:content (str "[[" pn "]]")}) page-names))]
                      (js/logseq.Editor.insertBatchBlock block-uuid blocks-to-insert #js {:sibling false}))
                    (js/logseq.App.showMsg "No memory pages found" :info))))

@@ -1,6 +1,8 @@
 (ns logseq-ai-hub.job-runner.commands-test
   (:require [cljs.test :refer [deftest testing is async use-fixtures]]
-            [logseq-ai-hub.job-runner.commands :as commands]))
+            [clojure.string :as str]
+            [logseq-ai-hub.job-runner.commands :as commands]
+            [logseq-ai-hub.job-runner.runner :as runner]))
 
 ;; =============================================================================
 ;; Test Fixtures and Mocks
@@ -98,6 +100,65 @@
                      (done)))
             (.catch (fn [err]
                       (is false (str "Handler failed: " err))
+                      (done))))))))
+
+;; =============================================================================
+;; Tests for the REAL commands/handle-job-run (not a reimplemented closure)
+;; =============================================================================
+
+(deftest test-job-run-real-handler-shows-real-id-and-warns-when-runner-off
+  (async done
+    (testing "the real handle-job-run shows the actual enqueued job id and warns when the Job Runner is disabled"
+      (swap! mock-state assoc-in [:blocks "run-uuid"]
+        #js {:uuid "run-uuid" :content "Jobs/RealJob"})
+      (let [orig-enqueue runner/enqueue-job!
+            msgs (atom [])]
+        (aset (.-App js/logseq) "showMsg"
+          (fn [msg status] (swap! msgs conj {:msg msg :status status})))
+        (aset js/logseq "settings" #js {"jobRunnerEnabled" false})
+        (set! runner/enqueue-job!
+          (fn [job-id] (js/Promise.resolve {:job-id job-id :status "queued"})))
+        (-> (commands/handle-job-run #js {:uuid "run-uuid"})
+            (.then (fn [_]
+                     (set! runner/enqueue-job! orig-enqueue)
+                     (is (= 1 (count @msgs)))
+                     (let [{:keys [msg status]} (first @msgs)]
+                       (is (str/includes? msg "Jobs/RealJob")
+                           "must show the real enqueued job id, not a blank/nil one")
+                       (is (re-find #"(?i)job runner is off" msg)
+                           "must tell the user the Job Runner is disabled")
+                       (is (re-find #"(?i)enable job runner" msg)
+                           "must name the Settings field to flip")
+                       (is (= "warning" status)))
+                     (done)))
+            (.catch (fn [err]
+                      (set! runner/enqueue-job! orig-enqueue)
+                      (is false (str "handler rejected: " err))
+                      (done))))))))
+
+(deftest test-job-run-real-handler-success-message-when-runner-on
+  (async done
+    (testing "the real handle-job-run shows a plain success message when the Job Runner is enabled"
+      (swap! mock-state assoc-in [:blocks "run-uuid-2"]
+        #js {:uuid "run-uuid-2" :content "Jobs/OtherJob"})
+      (let [orig-enqueue runner/enqueue-job!
+            msgs (atom [])]
+        (aset (.-App js/logseq) "showMsg"
+          (fn [msg status] (swap! msgs conj {:msg msg :status status})))
+        (aset js/logseq "settings" #js {"jobRunnerEnabled" true})
+        (set! runner/enqueue-job!
+          (fn [job-id] (js/Promise.resolve {:job-id job-id :status "queued"})))
+        (-> (commands/handle-job-run #js {:uuid "run-uuid-2"})
+            (.then (fn [_]
+                     (set! runner/enqueue-job! orig-enqueue)
+                     (let [{:keys [msg status]} (first @msgs)]
+                       (is (str/includes? msg "Jobs/OtherJob"))
+                       (is (not (re-find #"(?i)job runner is off" msg)))
+                       (is (= "success" status)))
+                     (done)))
+            (.catch (fn [err]
+                      (set! runner/enqueue-job! orig-enqueue)
+                      (is false (str "handler rejected: " err))
                       (done))))))))
 
 ;; =============================================================================

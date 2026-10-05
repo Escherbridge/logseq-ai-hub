@@ -4,11 +4,13 @@
 
 ;;; Mock data
 
+;; Mirrors the real js/logseq.DB.datascriptQuery return shape: the datalog
+;; namespace is stripped from pulled entity keys (e.g. :block/name -> "name").
 (def mock-project-pages
-  #js [#js [#js {"block/name" "projects/my-app"
-                 "block/original-name" "Projects/My App"}]
-       #js [#js {"block/name" "projects/old-site"
-                 "block/original-name" "Projects/Old Site"}]])
+  #js [#js [#js {"name" "projects/my-app"
+                 "original-name" "Projects/My App"}]
+       #js [#js {"name" "projects/old-site"
+                 "original-name" "Projects/Old Site"}]])
 
 (def mock-blocks-my-app
   #js [#js {:content "project-name:: My App\nproject-repo:: https://github.com/user/my-app\nproject-local-path:: /home/user/my-app\nproject-branch-main:: main\nproject-tech-stack:: ClojureScript, Bun\nproject-description:: My main application\nproject-status:: active\ntags:: logseq-ai-hub-project\n\nSome notes about the project here.\nMore context."}])

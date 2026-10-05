@@ -201,7 +201,9 @@
            (make-mock-job "Jobs/Test Job" "Skills/Test Skill" {} 3 #{}))
 
     (-> (runner/enqueue-job! "Jobs/Test Job")
-        (.then (fn [_]
+        (.then (fn [result]
+                 (is (= {:job-id "Jobs/Test Job" :status "queued"} result)
+                     "enqueue-job! must resolve a real {:job-id :status} map, not the bare status-write result")
                  (let [status (runner/runner-status)]
                    (is (= 1 (:queued status)))
                    (is (= 1 (count (:enqueue-calls @mock-queue-state))))

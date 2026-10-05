@@ -30,16 +30,19 @@
                                      (js/Promise.resolve #js {}))
                        :upsertBlockProperty (fn [uuid key val]
                                              (js/Promise.resolve #js {}))}
+         ;; Mirrors the real js/logseq.DB.datascriptQuery return shape: the
+         ;; datalog namespace is stripped from pulled entity keys
+         ;; (:block/name -> "name", :block/original-name -> "original-name").
          :DB #js {:datascriptQuery (fn [query]
                                      (cond
                                        (.includes query "jobs/")
-                                       #js [#js [#js {"block/name" "jobs/test-1"
-                                                     "block/original-name" "Jobs/Test 1"}]
-                                           #js [#js {"block/name" "jobs/test-2"
-                                                     "block/original-name" "Jobs/Test 2"}]]
+                                       #js [#js [#js {"name" "jobs/test-1"
+                                                     "original-name" "Jobs/Test 1"}]
+                                           #js [#js {"name" "jobs/test-2"
+                                                     "original-name" "Jobs/Test 2"}]]
                                        (.includes query "skills/")
-                                       #js [#js [#js {"block/name" "skills/summarize"
-                                                     "block/original-name" "Skills/Summarize"}]]
+                                       #js [#js [#js {"name" "skills/summarize"
+                                                     "original-name" "Skills/Summarize"}]]
                                        :else #js []))}
          :settings #js {:selectedModel "mock-model"}}))
 
@@ -118,6 +121,12 @@
                  (is (vector? results) "Should return a vector")
                  (is (= 2 (count results)) "Should find 2 job pages")
                  (is (every? map? results) "All results should be maps")
+                 ;; :job-id comes from the original-cased display name, which
+                 ;; is read from the (namespace-stripped) pull result. A wrong
+                 ;; keyword read would leave original-name nil, read-job-page
+                 ;; would be called with nil, and scan-job-pages would find 0.
+                 (is (= #{"Jobs/Test 1" "Jobs/Test 2"} (set (map :job-id results)))
+                     "job-id should be the real (original-cased) page names")
                  (done)))
         (.catch (fn [err]
                   (is false (str "Promise rejected: " err))
@@ -130,6 +139,8 @@
                  (is (vector? results) "Should return a vector")
                  (is (= 1 (count results)) "Should find 1 skill page")
                  (is (every? map? results) "All results should be maps")
+                 (is (= "Skills/Summarize" (:skill-id (first results)))
+                     "skill-id should be the real (original-cased) page name")
                  (done)))
         (.catch (fn [err]
                   (is false (str "Promise rejected: " err))

@@ -176,6 +176,21 @@
   (testing "connect! returns nil for nil params"
     (is (nil? (messaging/connect! nil nil)))))
 
+(deftest test-register-listener-survives-reconnect
+  (setup-mocks!)
+  (testing "register-listener! replays a custom SSE listener onto every new EventSource, surviving reconnects"
+    (messaging/connect! "http://localhost:3000" "test-token")
+    (messaging/register-listener! "hub_event" (fn [_e] nil))
+    (let [es1 (first @mock-es-instances)]
+      (is (contains? @(.-_handlers es1) "hub_event")
+          "listener must attach to the already-connected EventSource"))
+    ;; Simulate a reconnect: messaging builds a brand new EventSource.
+    (messaging/connect! "http://localhost:3000" "test-token")
+    (is (= 2 (count @mock-es-instances)))
+    (let [es2 (second @mock-es-instances)]
+      (is (contains? @(.-_handlers es2) "hub_event")
+          "the listener must be replayed onto the new EventSource after a reconnect -- a raw addEventListener bound to es1 would NOT survive this"))))
+
 (deftest test-disconnect-closes-event-source
   (setup-mocks!)
   (testing "disconnect! closes EventSource and resets state"

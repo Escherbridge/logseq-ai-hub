@@ -79,18 +79,21 @@
                     ;; Return mock results based on query
                     (cond
                       ;; Query for searching memories (includes?)
+                      ;; Mirrors the real js/logseq.DB.datascriptQuery shape: the
+                      ;; datalog namespace is stripped from pulled entity keys
+                      ;; (:block/content -> "content", :block/uuid -> "uuid").
                       (.includes query "includes?")
                       (js/Promise.resolve
-                        (clj->js [[{"block/content" "Memory about cats\nstored-at:: 2026-02-11T14:30:00.000Z\nmemory-tag:: animals"
-                                    "block/uuid" "uuid-1"}]
-                                  [{"block/content" "Another cat memory\nstored-at:: 2026-02-11T14:31:00.000Z\nmemory-tag:: pets"
-                                    "block/uuid" "uuid-2"}]]))
+                        (clj->js [[{"content" "Memory about cats\nstored-at:: 2026-02-11T14:30:00.000Z\nmemory-tag:: animals"
+                                    "uuid" "uuid-1"}]
+                                  [{"content" "Another cat memory\nstored-at:: 2026-02-11T14:31:00.000Z\nmemory-tag:: pets"
+                                    "uuid" "uuid-2"}]]))
 
                       ;; Query for listing/clearing pages (starts-with? without includes?)
                       (.includes query "starts-with?")
                       (js/Promise.resolve
-                        (clj->js [[{"block/name" "ai-memory/tag1"}]
-                                  [{"block/name" "ai-memory/tag2"}]]))
+                        (clj->js [[{"name" "ai-memory/tag1"}]
+                                  [{"name" "ai-memory/tag2"}]]))
 
                       :else
                       (js/Promise.resolve #js [])))}
@@ -252,7 +255,7 @@
       (-> (memory/retrieve-memories "cats")
           (.then (fn [results]
                    (is (= 2 (count results)))
-                   (is (.includes (:block/content (first results)) "cats"))
+                   (is (.includes (:content (first results)) "cats"))
                    (is (= 1 (count @datalog-queries)))
                    (let [query (first @datalog-queries)]
                      (is (.includes query "includes?"))

@@ -201,3 +201,32 @@
         (.catch (fn [err]
                   (is (nil? err) (str "Should not reject: " (.-message err)))))
         (.finally done))))
+
+(deftest test-search-finds-matching-lesson
+  ;; Regression guard: js/logseq.DB.datascriptQuery strips the datalog namespace
+  ;; from pulled entity keys (:block/name -> "name"). handle-lesson-search must
+  ;; read the stripped shape, or every candidate page name comes back nil and
+  ;; no lesson is ever found.
+  (async done
+    (set! (.-datascriptQuery (.-DB js/logseq))
+          (fn [_q]
+            (js/Promise.resolve
+              (clj->js [[{"name" "ai-memory/lessons/proj-x/bug-fix/null-check"
+                          "original-name" "AI-Memory/lessons/proj-x/bug-fix/null-check"}]]))))
+    (set! (.-getPageBlocksTree (.-Editor js/logseq))
+          (fn [_page-name]
+            (js/Promise.resolve
+              (clj->js [{:content "Always null-check before dereferencing a pointer."}]))))
+    (-> (lessons/handle-lesson-search {"query" "null-check"})
+        (.then (fn [result]
+                 (testing "finds the matching lesson"
+                   (is (= 1 (:count result))))
+                 (testing "lesson metadata is extracted from the real page name"
+                   (let [entry (first (:results result))]
+                     (is (= "ai-memory/lessons/proj-x/bug-fix/null-check" (:page entry)))
+                     (is (= "proj-x" (:project entry)))
+                     (is (= "bug-fix" (:category entry)))
+                     (is (= "null-check" (:title entry)))))))
+        (.catch (fn [err]
+                  (is (nil? err) (str "Should not reject: " (.-message err)))))
+        (.finally done))))

@@ -141,6 +141,38 @@
                     (is (str/includes? (.-message err) "project"))
                     (done)))))))
 
+(deftest handle-track-list-returns-real-tracks
+  ;; Regression guard: js/logseq.DB.datascriptQuery strips the datalog namespace
+  ;; from pulled entity keys (:block/name -> "name"). handle-track-list must
+  ;; read the stripped shape, or every candidate track page comes back nil
+  ;; and getPage is never called with a real page name.
+  (testing "lists tracks discovered via datascriptQuery with their real properties"
+    (async done
+      (set! (.-datascriptQuery (.-DB js/logseq))
+            (fn [_q]
+              (js/Promise.resolve
+                (clj->js [[{"name" "projects/myproj/tracks/feature-auth"
+                            "original-name" "Projects/myproj/tracks/feature-auth"}]]))))
+      (set! (.-getPage (.-Editor js/logseq))
+            (fn [_name]
+              (js/Promise.resolve
+                #js {:properties #js {"track-status" "active"
+                                       "track-priority" "high"}})))
+      (-> (tasks/handle-track-list {"project" "myproj"})
+          (.then (fn [result]
+                   (testing "finds the one track"
+                     (is (= 1 (:count result))))
+                   (testing "track fields reflect the real page name and properties"
+                     (let [trk (first (:tracks result))]
+                       (is (= "Projects/myproj/tracks/feature-auth" (:page trk)))
+                       (is (= "feature-auth" (:trackId trk)))
+                       (is (= "active" (:status trk)))
+                       (is (= "high" (:priority trk)))))
+                   (done)))
+          (.catch (fn [err]
+                    (is false (str "Unexpected error: " err))
+                    (done)))))))
+
 ;;; ---------------------------------------------------------------------------
 ;;; handle-project-dashboard tests
 ;;; ---------------------------------------------------------------------------

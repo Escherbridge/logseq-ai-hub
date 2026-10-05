@@ -15,20 +15,20 @@
                       ;; Tool tag query
                       (re-find #"logseq-ai-hub-tool" query)
                       (js/Promise.resolve
-                        #js [#js [#js {"block/name" "tools/send-slack"
-                                       "block/original-name" "Tools/send-slack"}]])
+                        #js [#js [#js {"name" "tools/send-slack"
+                                       "original-name" "Tools/send-slack"}]])
 
                       ;; Prompt tag query
                       (re-find #"logseq-ai-hub-prompt" query)
                       (js/Promise.resolve
-                        #js [#js [#js {"block/name" "prompts/code-review"
-                                       "block/original-name" "Prompts/code-review"}]])
+                        #js [#js [#js {"name" "prompts/code-review"
+                                       "original-name" "Prompts/code-review"}]])
 
                       ;; Procedure tag query
                       (re-find #"logseq-ai-hub-procedure" query)
                       (js/Promise.resolve
-                        #js [#js [#js {"block/name" "procedures/deploy"
-                                       "block/original-name" "Procedures/deploy"}]])
+                        #js [#js [#js {"name" "procedures/deploy"
+                                       "original-name" "Procedures/deploy"}]])
 
                       ;; Default: empty
                       :else (js/Promise.resolve #js [])))}

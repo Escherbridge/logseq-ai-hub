@@ -100,6 +100,32 @@
       (is (= "" (:restricted-operations sections))))))
 
 ;; ---------------------------------------------------------------------------
+;; 3b. scan-pi-agents! — reads the real datascriptQuery shape (async)
+;; Regression guard: js/logseq.DB.datascriptQuery strips the datalog namespace
+;; from pulled entity keys (:block/name -> "name"). scan-pi-agents! must read
+;; the stripped shape, or every agent page comes back with page-name/
+;; original-name nil.
+;; ---------------------------------------------------------------------------
+
+(deftest scan-pi-agents-returns-real-page-names
+  (async done
+    (set! (.-datascriptQuery (.-DB js/logseq))
+          (fn [_q]
+            (js/Promise.resolve
+              (clj->js [[{"name" "pi-agents/cody"
+                          "original-name" "PI-Agents/cody"}]]))))
+    (-> (pi-agents/scan-pi-agents!)
+        (.then (fn [pages]
+                 (testing "finds the scanned agent page"
+                   (is (= 1 (count pages))))
+                 (testing "page-name and original-name are the real pulled values"
+                   (is (= "pi-agents/cody" (:page-name (first pages))))
+                   (is (= "PI-Agents/cody" (:original-name (first pages)))))))
+        (.catch (fn [err]
+                  (is false (str "Should not reject: " (.-message err)))))
+        (.finally done))))
+
+;; ---------------------------------------------------------------------------
 ;; 4. handle-pi-agent-list — resolves even with no required params (async)
 ;; ---------------------------------------------------------------------------
 

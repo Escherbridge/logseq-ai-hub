@@ -1,8 +1,10 @@
 (ns logseq-ai-hub.event-hub.init-test
-  (:require [cljs.test :refer-macros [deftest is testing]]
+  (:require [cljs.test :refer-macros [deftest is testing async]]
+            [clojure.string :as str]
             [logseq-ai-hub.event-hub.init :as event-hub-init]
             [logseq-ai-hub.event-hub.dispatcher :as dispatcher]
             [logseq-ai-hub.event-hub.graph-watcher :as graph-watcher]
+            [logseq-ai-hub.event-hub.commands :as commands]
             [logseq-ai-hub.messaging :as messaging]))
 
 ;; ---------------------------------------------------------------------------
@@ -152,3 +154,78 @@
     (is (true? @event-hub-init/initialized?))
     (is (some? dispatcher/*enqueue-job-fn*))
     (is (= 0 (count @sse-listeners)))))
+
+;; ---------------------------------------------------------------------------
+;; event:recent / event:sources must surface real failures, never silently
+;; render a non-2xx response or a blank server config as an empty list.
+;; ---------------------------------------------------------------------------
+
+(deftest test-event-recent-rejects-on-non-ok-response
+  (setup-mocks!)
+  (testing "a non-2xx /api/events response must surface as an error, not 'No recent events'"
+    (suppress-console!)
+    (event-hub-init/init!)
+    (restore-console!)
+    (set! js/fetch
+      (fn [_url _opts]
+        (js/Promise.resolve
+          #js {:ok false :status 401 :json (fn [] (js/Promise.resolve #js {}))})))
+    (let [inserted (atom [])]
+      (aset (.-Editor js/logseq) "insertBlock"
+        (fn [uuid content _opts]
+          (swap! inserted conj {:uuid uuid :content content})
+          (js/Promise.resolve nil)))
+      (async done
+        (-> (commands/handle-event-recent #js {:uuid "block-recent-401"})
+            (.then (fn [_]
+                     (let [content (:content (first @inserted))]
+                       (is (not (str/includes? content "No recent events"))
+                           "a 401 must never render as a silently-empty table")
+                       (is (str/includes? content "401")
+                           "the error must name the HTTP status that failed"))
+                     (done))))))))
+
+(deftest test-event-recent-rejects-when-server-unconfigured
+  (setup-mocks!)
+  (testing "a blank/missing server config must say so, not silently show an empty table"
+    (set! (.-settings js/logseq)
+      #js {"eventHubEnabled" true "webhookServerUrl" "" "pluginApiToken" ""})
+    (suppress-console!)
+    (event-hub-init/init!)
+    (restore-console!)
+    (let [inserted (atom [])]
+      (aset (.-Editor js/logseq) "insertBlock"
+        (fn [uuid content _opts]
+          (swap! inserted conj {:uuid uuid :content content})
+          (js/Promise.resolve nil)))
+      (async done
+        (-> (commands/handle-event-recent #js {:uuid "block-recent-unconf"})
+            (.then (fn [_]
+                     (let [content (:content (first @inserted))]
+                       (is (not (str/includes? content "No recent events")))
+                       (is (str/includes? content "Webhook Server URL")
+                           "must name the setting the user needs to fix"))
+                     (done))))))))
+
+(deftest test-event-sources-rejects-on-non-ok-response
+  (setup-mocks!)
+  (testing "a non-2xx /api/events response must surface as an error, not 'No active event sources'"
+    (suppress-console!)
+    (event-hub-init/init!)
+    (restore-console!)
+    (set! js/fetch
+      (fn [_url _opts]
+        (js/Promise.resolve
+          #js {:ok false :status 500 :json (fn [] (js/Promise.resolve #js {}))})))
+    (let [inserted (atom [])]
+      (aset (.-Editor js/logseq) "insertBlock"
+        (fn [uuid content _opts]
+          (swap! inserted conj {:uuid uuid :content content})
+          (js/Promise.resolve nil)))
+      (async done
+        (-> (commands/handle-event-sources #js {:uuid "block-src-500"})
+            (.then (fn [_]
+                     (let [content (:content (first @inserted))]
+                       (is (not (str/includes? content "No active event sources")))
+                       (is (str/includes? content "500")))
+                     (done))))))))
