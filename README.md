@@ -5,6 +5,10 @@ Transform Logseq into a central orchestration layer for AI workflows, MCP tools,
 [![CI](https://github.com/escherbridge/logseq-ai-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/escherbridge/logseq-ai-hub/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+![Running /LLM inside a Logseq journal page: the block content is sent to the configured model and the reply is inserted as a child block.](resources/demo-llm.gif)
+
+*`/LLM` in a journal page — block content goes to your configured model and the reply lands as a child block. The same command also resolves `[[MCP/server]]` and `[[AI-Memory/tag]]` references for tool use and context.*
+
 ---
 
 ## Table of Contents
@@ -91,8 +95,6 @@ Only the LLM key and the Logseq desktop app are needed to *use* the plugin from 
 ---
 
 ## Installation
-
-<!-- TODO(marketplace): add resources/screenshot.png showing the plugin in action and reference it here -->
 
 ### 1. Install the plugin
 
