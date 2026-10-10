@@ -41,6 +41,20 @@ Decisions that are easy to undo by accident:
   which is what creates backlinks. `mode: "add"`/`"remove"` merge into the existing
   list case-insensitively. That merge is what `page_link` relies on so it never
   clobbers existing relations.
+- **Never trust host value shapes for properties.** Against a live graph,
+  `getBlockProperty` returned link-valued properties as objects that `js->clj`
+  leaves opaque, and `add` wrote `[[[object Object]]]` into the page. `add` and
+  `remove` now read the `key:: value` line from the block's own content.
+  `tags::`/`alias::` plain `a, b` text counts as a list, because Logseq treats it as one.
+- **`preBlock?` is only set when Logseq parses a file.** A properties block written
+  through the API is not flagged until then, so every check (page_read's `pre`,
+  the "nothing before the properties block" guard) recognises it by content: the
+  first top-level block, holding only `key:: value` lines.
+- **A page that exists only by reference is fillable.** A `[[link]]` creates the
+  target page with no content. `page_create` treats a page with no content (no
+  blocks, a blank placeholder, or only a properties block) as unwritten, even under
+  `if_exists: "skip"`. Linking first and writing later is the natural order when
+  building a graph, and the first live corpus run tripped on exactly that.
 - **Deletes are all-or-nothing and de-duplicated.** Every uuid is resolved before
   anything is removed. A listed block that sits inside another listed block is
   skipped, since it goes with its ancestor anyway.

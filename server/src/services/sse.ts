@@ -5,24 +5,22 @@ interface SSEClient {
   controller: ReadableStreamDefaultController;
 }
 
+/** Seconds between SSE heartbeats. Bun.serve's idleTimeout is derived from this in src/index.ts. */
+export const HEARTBEAT_SECONDS = 15;
+
 export class SSEManager {
   private clients: Map<string, SSEClient> = new Map();
   private eventId = 0;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
-  /**
-   * Heartbeat keeps the SSE stream from looking idle to an intermediate proxy.
-   * 15s, not 30s: edge proxies commonly close idle connections at 30-60s, so a
-   * 30s beat races the timeout and the plugin link flaps (observed in
-   * production as pluginConnected alternating within seconds).
-   */
+  /** Keeps SSE streams from looking idle to Bun and to any proxy in front of it. */
   start(): void {
     this.heartbeatInterval = setInterval(() => {
       this.broadcast({
         type: "heartbeat",
         data: { timestamp: new Date().toISOString() },
       });
-    }, 15_000);
+    }, HEARTBEAT_SECONDS * 1000);
   }
 
   stop(): void {

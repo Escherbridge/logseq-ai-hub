@@ -134,7 +134,7 @@ In plugin settings set **Webhook Server URL** to the server origin, **Authentica
 curl -s https://<server>/health | jq '.agentApi.pluginConnected'   # true
 ```
 
-`pluginConnected` is `sseManager.clientCount > 0`. A healthy server with `pluginConnected: false` means the server is fine and **the plugin is not attached** — check the token match and that Logseq is running with the plugin enabled. If it alternates between `true` and `false` within seconds, the SSE stream is being closed by an intermediate proxy; that is a flap, not a config error.
+`pluginConnected` is `sseManager.clientCount > 0`. A healthy server with `pluginConnected: false` means the server is fine and **the plugin is not attached** — check the token match and that Logseq is running with the plugin enabled. If it alternates between `true` and `false` within seconds, the SSE stream is being cut. The cause found on 2026-10-10 was Bun's own `idleTimeout`, which defaults to 10s, below the 15s heartbeat. `server/src/index.ts` now derives `idleTimeout` from `HEARTBEAT_SECONDS`. A proxy with an idle timeout under 15s would produce the same symptom. To measure it, poll `/health` once a second for 30s and count the `false` samples.
 
 ---
 

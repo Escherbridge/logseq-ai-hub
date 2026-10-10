@@ -146,6 +146,53 @@
                        (op-error "graph_search" {"query" "a b c d e f g h i"})))
               (.then (fn [msg] (is (str/includes? msg "at most 8 terms") "extra terms are refused, not dropped")))))))))
 
+(deftest blank-page-cases
+  (doseq [[label blocks expected]
+          [["no blocks" [] true]
+           ["Logseq's blank placeholder" [{:content "" :children []}] true]
+           ["only a properties block" [{:content "concepts:: [[A]]" :children []}] true]
+           ["real content" [{:content "concepts:: [[A]]" :children []} {:content "summary" :children []}] false]
+           ["properties-only text that is not first is content" [{:content "x"} {:content "k:: v"}] false]
+           ["a blank block with children has content" [{:content "" :children [{:content "kid"}]}] false]]]
+    (is (= expected (ops/blank-page? blocks)) label)))
+
+(deftest link-first-write-later
+  (testing "a page that exists only because something links to it is written, not skipped"
+    (let [conn (fake/install!)]
+      ;; Linking creates the target pages, exactly as the first live corpus run did.
+      (fake/seed! conn [{:name "Notes" :blocks ["see [[Later]] and [[Hub]]"]}])
+      (async done
+        (run-flow done
+          (-> (op "page_create" {"name" "Later" "content" "- body" "if_exists" "skip"})
+              (.then (fn [r]
+                       (is (true? (:created r)) "a reference-only page is filled despite skip")
+                       (op "properties_set" {"page" "Hub" "properties" {"concepts" ["Later"]} "mode" "add"})))
+              (.then (fn [_]
+                       (op "page_create" {"name" "Hub" "content" "- summary"
+                                          "properties" {"type" ["paper"]} "if_exists" "skip"})))
+              (.then (fn [r]
+                       (is (true? (:created r)) "a page holding only a properties block is still unwritten")
+                       (op "page_read" {"name" "Hub"})))
+              (.then (fn [r]
+                       (let [props (first (:blocks r))]
+                         (is (:pre props) "recognised as page properties even though the host did not flag it")
+                         (is (str/includes? (:content props) "concepts:: [[Later]]") "earlier links survive")
+                         (is (str/includes? (:content props) "type:: [[paper]]")))
+                       (is (= [["summary"]] (body-shape r)))
+                       (op "page_create" {"name" "Later" "content" "- again" "if_exists" "skip"})))
+              (.then (fn [r]
+                       (is (false? (:created r)) "once written, skip protects it")))))))))
+
+(deftest add-to-ui-written-tags
+  (testing "adding a tag merges into Logseq's plain `a, b` tag text instead of refusing it"
+    (let [conn (fake/install!)]
+      (fake/seed! conn [{:name "Note" :blocks ["tags:: alpha, beta" "body"]}])
+      (async done
+        (run-flow done
+          (-> (op "properties_set" {"page" "Note" "properties" {"tags" ["Gamma" "alpha"]} "mode" "add"})
+              (.then (fn [r]
+                       (is (= "[[alpha]], [[beta]], [[Gamma]]" (get-in r [:properties :tags])))))))))))
+
 (deftest filter-by-non-text-property
   (testing "boolean property values (public:: true) filter instead of crashing the listing"
     (let [conn (fake/install!)]

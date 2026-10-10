@@ -97,8 +97,8 @@
 (def ^:private property-key-re #"[A-Za-z][A-Za-z0-9_-]*")
 
 (defn- properties-param
-  "Validated {key value}: keys lower-cased (Logseq stores them that way, and
-   getBlockProperty looks them up verbatim); each value a single-line string,
+  "Validated {key value}: keys lower-cased (Logseq stores them that way);
+   each value a single-line string,
    a vector of single-line strings, or nil."
   [params k required?]
   (let [props (get params k)
@@ -332,6 +332,21 @@
                 :else
                 (insert-nodes! (str (:uuid (peek blocks))) {:sibling true} nodes))))))))
 
+(defn- page-properties-block?
+  "Resolves true when `block` is its page's properties block: the first top-level
+   block, holding only properties. Not :preBlock? alone — Logseq sets that only
+   after re-parsing a file, so blocks written through the API never carry it."
+  [block]
+  (if (and (= (get-in block [:parent :id]) (get-in block [:page :id]))
+           (or (:preBlock? block) (properties-only? (:content block))))
+    (-> (get-page (get-in block [:page :id]))
+        (.then #(page-tree (page-title %)))
+        (.then #(= (str (:uuid block)) (str (:uuid (first %))))))
+    (js/Promise.resolve false)))
+
+(def ^:private displaces-properties
+  "Nothing can go before a page's properties block — the page would lose its properties. Use position \"after\".")
+
 (defn- insert-at-block!
   "Inserts nodes before/after a block, or as its last children."
   [uuid position nodes]
@@ -339,9 +354,8 @@
       (.then
         (fn [block]
           (case position
-            "before" (if (:preBlock? block)
-                       (fail "Nothing can go before a page's properties block — use position \"after\".")
-                       (insert-nodes! uuid {:sibling true :before true} nodes))
+            "before" (.then (page-properties-block? block)
+                            #(if % (fail displaces-properties) (insert-nodes! uuid {:sibling true :before true} nodes)))
             "after" (insert-nodes! uuid {:sibling true} nodes)
             "child" (if-let [last-child (last (filter map? (:children block)))]
                       (insert-nodes! (str (:uuid last-child)) {:sibling true} nodes)
@@ -356,24 +370,39 @@
 ;; Properties
 ;; =============================================================================
 
+(defn property-line-value
+  "Raw text after `key::` in a block's content, or nil when the line is absent."
+  [content key]
+  (some (fn [line]
+          (when-let [[_ k v] (re-matches #"^\s*([A-Za-z][A-Za-z0-9_-]*):: (.*)$" line)]
+            (when (= (str/lower-case k) key) v)))
+        (str/split-lines (or content ""))))
+
 (defn- write-block-properties!
-  "Writes properties onto an existing block; resolves to {key written-text-or-nil}."
+  "Writes properties onto an existing block; resolves to {key written-text-or-nil}.
+   add/remove read the current value from the block's own text, not
+   getBlockProperty: for link-valued properties the host returns objects that
+   js->clj leaves opaque, which once wrote [[[object Object]]] into a live graph."
   [uuid props mode]
-  (reduce
-    (fn [acc [key value]]
-      (.then acc
-        (fn [written]
-          (-> (if (= mode "set")
-                (js/Promise.resolve nil)
-                (-> (js/logseq.Editor.getBlockProperty uuid key) (.then ->clj)))
-              (.then (fn [current]
-                       (let [text (final-value value current mode)]
-                         (-> (if (nil? text)
-                               (js/logseq.Editor.removeBlockProperty uuid key)
-                               (js/logseq.Editor.upsertBlockProperty uuid key text))
-                             (.then (fn [_] (assoc written key text)))))))))))
-    (js/Promise.resolve {})
-    props))
+  (-> (if (= mode "set") (js/Promise.resolve nil) (require-block uuid))
+      (.then
+        (fn [block]
+          (reduce
+            (fn [acc [key value]]
+              (.then acc
+                (fn [written]
+                  (let [raw (property-line-value (:content block) key)
+                        ;; Logseq treats tags/alias as page lists even as plain `a, b` text.
+                        current (if (and raw (#{"tags" "alias"} key) (not (str/includes? raw "[[")))
+                                  (link-list (->> (str/split raw #",") (map str/trim) (remove str/blank?)))
+                                  raw)
+                        text (final-value value current mode)]
+                    (-> (if (nil? text)
+                          (js/logseq.Editor.removeBlockProperty uuid key)
+                          (js/logseq.Editor.upsertBlockProperty uuid key text))
+                        (.then (fn [_] (assoc written key text))))))))
+            (js/Promise.resolve {})
+            props)))))
 
 (defn- page-properties-block
   "The page's properties block (its first block when that holds only properties)."
@@ -535,7 +564,10 @@
                           {:page {:name (page-title page)
                                   :uuid (str (:uuid page))
                                   :journal (boolean (:journal? page))}
-                           :blocks (mapv ->node blocks)})))))))
+                           ;; Logseq only flags preBlock? after re-parsing the file, so a
+                           ;; properties block written through the API is recognised by content.
+                           :blocks (cond-> (mapv ->node blocks)
+                                     (page-properties-block blocks) (assoc-in [0 :pre] true))})))))))
 
 (defn handle-block-get [params]
   (let [uuid (required-uuid params "uuid")]
@@ -609,6 +641,16 @@
 ;; Write handlers
 ;; =============================================================================
 
+(defn blank-page?
+  "True when a page's top-level blocks hold no content: none at all, Logseq's blank
+   placeholder, or only a properties block. Such a page exists only by reference."
+  [blocks]
+  (every? (fn [[index block]]
+            (and (empty? (filter map? (:children block)))
+                 (or (str/blank? (:content block))
+                     (and (zero? index) (properties-only? (:content block))))))
+          (map-indexed vector blocks)))
+
 (defn- property-texts [props]
   (into {} (map (fn [[k v]] [k (final-value v nil "set")])) props))
 
@@ -618,23 +660,31 @@
         props (properties-param params "properties" false)
         if-exists (choice-param params "if_exists" #{"error" "skip" "append"} "error")]
     (-> (get-page page-name)
+        (.then #(if % (.then (page-tree (page-title %)) (fn [blocks] [% blocks])) [nil nil]))
         (.then
-          (fn [existing]
-            (cond
-              (and existing (= if-exists "error"))
-              (fail (str "Page already exists: " (page-title existing)
-                         ". Pass if_exists \"append\" to add to it, or \"skip\" to leave it."))
+          (fn [[existing blocks]]
+            (let [fill! (fn [title created?]
+                          (-> (if props (write-page-properties! title props "set") (js/Promise.resolve nil))
+                              (.then #(insert-into-page! title "end" nodes))
+                              (.then (fn [uuids] {:page title :created created? :uuids uuids}))))]
+              (cond
+                ;; A page that only exists because something links to it has nothing to
+                ;; protect; writing it is what the caller meant. Link-first, write-later
+                ;; is the natural order when building a graph.
+                (and existing (blank-page? blocks))
+                (fill! (page-title existing) true)
 
-              (and existing (= if-exists "skip"))
-              {:page (page-title existing) :created false :uuids []}
+                (and existing (= if-exists "error"))
+                (fail (str "Page already exists: " (page-title existing)
+                           ". Pass if_exists \"append\" to add to it, or \"skip\" to leave it."))
 
-              existing
-              (let [title (page-title existing)]
-                (-> (if props (write-page-properties! title props "set") (js/Promise.resolve nil))
-                    (.then #(insert-into-page! title "end" nodes))
-                    (.then (fn [uuids] {:page title :created false :uuids uuids}))))
+                (and existing (= if-exists "skip"))
+                {:page (page-title existing) :created false :uuids []}
 
-              :else
+                existing
+                (fill! (page-title existing) false)
+
+                :else
               (-> (js/logseq.Editor.createPage page-name
                                                (clj->js (property-texts (remove (comp nil? val) props)))
                                                #js {:createFirstBlock false :redirect false})
@@ -643,7 +693,7 @@
                              (let [title (or (.-originalName ^js page) page-name)]
                                (.then (insert-into-page! title "end" nodes)
                                       (fn [uuids] {:page title :created true :uuids uuids})))
-                             (fail (str "Logseq did not create page: " page-name))))))))))))
+                             (fail (str "Logseq did not create page: " page-name)))))))))))))
 
 (defn handle-page-delete [params]
   (let [page-name (required-text params "name")]
@@ -747,9 +797,6 @@
                  {:uuid uuid :moved true}
                  (fail "Logseq did not move the block (it may have refused the target)."))))))
 
-(def ^:private displaces-properties
-  "Nothing can go before a page's properties block — the page would lose its properties.")
-
 (defn handle-block-move [params]
   (let [uuid (required-uuid params "uuid")
         [target-kind target] (exactly-one params "target_uuid" "page")]
@@ -766,9 +813,9 @@
                              (let [last-child (last (filter map? (:children target-block)))
                                    parent-id (get-in target-block [:parent :id])]
                                (case position
-                                 "before" (if (:preBlock? target-block)
-                                            (fail displaces-properties)
-                                            (move-and-confirm! uuid target {:before true} parent-id))
+                                 "before" (.then (page-properties-block? target-block)
+                                                 #(if % (fail displaces-properties)
+                                                        (move-and-confirm! uuid target {:before true} parent-id)))
                                  "after" (move-and-confirm! uuid target {} parent-id)
                                  "child" (if last-child
                                            (move-and-confirm! uuid (str (:uuid last-child)) {} (:id target-block))

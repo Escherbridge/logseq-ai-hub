@@ -163,7 +163,7 @@
      "page" {"id" (:db/id (:block/page e))}
      "parent" {"id" (:db/id (:block/parent e))}
      "properties" (api-properties (:block/properties e))
-     "preBlock?" (pre-block? db eid)
+     "preBlock?" (boolean (:fake/flagged-pre? e))   ; real Logseq sets this only when parsing a file, e.g. after createPage with properties
      "children" (if include-children?
                   (mapv #(block-map db % true) kids)
                   (mapv (fn [k] ["uuid" (str (:block/uuid (d/entity db k)))]) kids))}))
@@ -247,7 +247,8 @@
            eid (or existing (ensure-page! conn page-name))
            props (js->clj props)]
        (when (and (not existing) (seq props))
-         (create-block! conn eid eid 0 (str/join "\n" (map (fn [[k v]] (str k ":: " v)) props))))
+         (let [pre (create-block! conn eid eid 0 (str/join "\n" (map (fn [[k v]] (str k ":: " v)) props)))]
+           (d/transact! conn [{:db/id pre :fake/flagged-pre? true}])))
        (resolved (page-map @conn eid))))
 
    :deletePage
@@ -277,13 +278,6 @@
                       (sort-by (comp :block/original-name #(d/entity db %) key))
                       (mapv (fn [[src pairs]]
                               [(page-map db src) (mapv #(block-map db (second %) false) pairs)]))))))
-
-   :getBlockProperty
-   (fn [uuid key]
-     ;; Case-sensitive, like Logseq's (keyword key) lookup; stored keys are lower-case.
-     (let [props (:block/properties (d/entity @conn (block-eid @conn uuid)))
-           value (get props (keyword key))]
-       (resolved (if (set? value) (vec (sort value)) value))))
 
    :upsertBlockProperty
    (fn [uuid key value]
