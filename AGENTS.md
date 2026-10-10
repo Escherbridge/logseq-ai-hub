@@ -119,7 +119,7 @@ docker run -p 3000:3000 -v "$PWD/data:/app/data" \
 
 ```bash
 curl -s https://<server>/health | jq '{status, mcpTools: .mcp.tools}'
-# {"status":"ok","mcpTools":95}
+# {"status":"ok","mcpTools":104}
 ```
 
 ---
@@ -173,14 +173,30 @@ curl -s -X POST $U "${H[@]}" -H "mcp-session-id: $SID" \
   -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' > /dev/null
 curl -s -X POST $U "${H[@]}" -H "mcp-session-id: $SID" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-  | sed -n 's/^data: //p' | jq '.result.tools | length'                     # 95
+  | sed -n 's/^data: //p' | jq '.result.tools | length'                     # 104
 ```
 
 Responses are server-sent events, so the JSON body arrives on `data:` lines — pipe through `sed -n 's/^data: //p'` before `jq`.
 
 Run `initialize` **twice** as a regression check: both must return 200 with different `mcp-session-id` values. A 500 on the second means the server is sharing one MCP instance across sessions and only the first client will ever work.
 
-Of the 95 tools, 14 are purely server-local and work with Logseq closed — approvals (1), character sessions (3), messaging (3) and agent sessions (7). The rest live in modules that proxy at least some calls into Logseq over SSE (`graph_*`, `page_*`, `block_*`, memory, jobs, registry, projects, ADRs, lessons, safeguards, tasks, pi-agents); a few of those modules mix bridge and database calls, so check the individual tool rather than assuming per module. A bridge-backed tool called while the plugin is disconnected fails with *"Plugin not connected"* — that is `AgentBridge.sendRequest` refusing up front, not the tool being broken.
+Of the 104 tools, 14 are purely server-local and work with Logseq closed — approvals (1), character sessions (3), messaging (3) and agent sessions (7). The rest live in modules that proxy at least some calls into Logseq over SSE (`graph_*`, `page_*`, `block_*`, memory, jobs, registry, projects, ADRs, lessons, safeguards, tasks, pi-agents); a few of those modules mix bridge and database calls, so check the individual tool rather than assuming per module. A bridge-backed tool called while the plugin is disconnected fails with *"Plugin not connected"* — that is `AgentBridge.sendRequest` refusing up front, not the tool being broken.
+
+### Working with the graph
+
+Clients receive a short usage guide in the server's `instructions` on `initialize`. The core loop is find, read, then edit by uuid:
+
+```text
+graph_search  {query: "rust ownership"}                → hits with ⟨uuid⟩ and snippets
+page_read     {name: "Rust"}                           → indented outline, one ⟨uuid⟩ per block
+block_insert  {uuid: "<uuid>", content: "- Borrowing\n  - &T vs &mut T"}   → new uuids
+page_create   {name: "Borrow checker", content: "- ...", properties: {tags: ["rust"]}}
+page_link     {from: "Rust", to: "Borrow checker"}     → related:: [[Borrow checker]], a backlink on the target
+page_links    {name: "Borrow checker"}                 → shows Rust as a backlink
+block_delete  {uuids: ["<uuid>", "<uuid>"]}            → all-or-nothing
+```
+
+Read tools return compact text rather than JSON to save context. On large pages pass `max_blocks` to `page_read` and drill into a branch with `block_get`. Full reference: `docs/mcp-tools.md` § Graph Tools.
 
 ---
 
@@ -191,7 +207,7 @@ Have the user run **`/ai-hub:doctor`** in any Logseq block. It replaces the bloc
 ```
 ## AI Hub diagnostics
 ✅ **LLM** — key sk-or-…e79b accepted by https://openrouter.ai/api/v1 (820ms). Model: anthropic/claude-sonnet-4
-✅ **Server** — https://… is healthy and THIS plugin is linked (95 MCP tools).
+✅ **Server** — https://… is healthy and THIS plugin is linked (104 MCP tools).
 ⚠️ **Job Runner** — disabled — /job:* will queue jobs that never execute.
 ```
 

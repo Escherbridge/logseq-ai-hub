@@ -210,8 +210,13 @@ export function registerCharacterTools(server: McpServer, getContext: () => McpT
       if (character.skills.length > 0) properties["skills"] = character.skills.join(", ");
 
       try {
-        await ctx.bridge.sendRequest("page_create", { name: pageName, properties }, ctx.traceId);
-        if (character.system_prompt) {
+        // "append" makes re-sync update properties on an existing page instead of failing.
+        const result = (await ctx.bridge.sendRequest(
+          "page_create",
+          { name: pageName, properties, if_exists: "append" },
+          ctx.traceId,
+        )) as { created?: boolean } | undefined;
+        if (character.system_prompt && result?.created) {
           await ctx.bridge.sendRequest(
             "block_append",
             { page: pageName, content: character.system_prompt },

@@ -48,15 +48,28 @@ The Agent Bridge connects the Logseq plugin to the AI Hub server via SSE (Server
 
 ### Graph Operations
 
+_Source: `src/main/logseq_ai_hub/graph_ops.cljs` (design notes: `src/main/logseq_ai_hub/AGENTS.md` § graph-ops)._ Failures reject with a message; nothing resolves to an empty-but-successful value. `Node` = `{uuid, content, pre?: true, children: Node[]}` (`pre` marks the page-properties block).
+
 | Operation | Description | Parameters | Returns |
 |-----------|-------------|------------|---------|
-| `graph_query` | Run a Datalog query against the Logseq graph | `query` (string) | `{results: [...]}` |
-| `graph_search` | Full-text search across Logseq pages | `query` (string), `limit` (number, default 50) | `{results: [...], total}` |
-| `page_read` | Read the full block tree of a Logseq page | `name` (string) | `{page, blocks: [...]}` |
-| `page_create` | Create a new Logseq page with optional content and properties | `name` (string), `content` (string, opt), `properties` (object, opt) | `{page, created: true}` |
-| `page_list` | List pages matching a substring pattern | `pattern` (string, opt), `limit` (number, default 100) | `{pages: [{name, originalName}], total}` |
-| `block_append` | Append a block to a Logseq page | `page` (string), `content` (string), `properties` (object, opt) | `{page, blockUuid}` |
-| `block_update` | Update an existing block's content by UUID | `uuid` (string), `content` (string) | `{uuid, updated: true}` |
+| `graph_query` | Raw Datalog query | `query`, `limit` (default 100, max 1000) | `{results, total, truncated}` |
+| `graph_search` | Case-insensitive text search; every term must appear | `query`, `limit` (default 20, max 100), `page` (opt) | `{query, pages, pagesTotal, blocks: [{uuid, page, content}], total}` |
+| `page_list` | List pages with filters | `pattern`, `namespace`, `tag`, `property: {key, value?}`, `journals` (`exclude`|`include`|`only`), `sort` (`updated`|`name`), `limit` (50), `offset` (all opt) | `{total, offset, pages: [{name, updatedAt?, journal?, tags?}]}` |
+| `page_read` | A page as a block tree | `name` | `{page: {name, uuid, journal}, blocks: Node[]}` |
+| `block_get` | One block and its subtree | `uuid` | `{uuid, page, parentUuid, content, children}` |
+| `page_links` | Outgoing links and backlinks | `name`, `direction` (`both`|`in`|`out`), `limit` (50) | `{page, outgoing?, backlinks?: [{page, blocks}], backlinksTotal?}` |
+| `page_create` | Create a page from a markdown outline | `name`, `content` (opt), `properties` (opt), `if_exists` (`error`|`skip`|`append`) | `{page, created, uuids}` |
+| `page_delete` | Delete a page and its blocks | `name` | `{deleted, blocks}` |
+| `page_rename` | Rename a page; refuses to merge into an existing one | `name`, `new_name` | `{from, to}` |
+| `block_insert` | Insert an outline at a page or block | `content`, `page` | `uuid`, `position` (page: `end`|`start`; block: `child`|`before`|`after`) | `{uuids}` |
+| `block_append` | Legacy single-block append (used by the server agent) | `page`, `content`, `properties` (opt) | `{page, blockUuid}` |
+| `block_update` | Replace content and/or set properties; keeps `id::` | `uuid`, `content` (opt), `properties` (opt) | `{uuid, updated}` |
+| `block_delete` | All-or-nothing delete of one or more blocks | `uuid` | `uuids` | `{deleted: [{uuid, page, preview, descendants}]}` |
+| `block_move` | Move a block next to/under a block or onto a page | `uuid`, `target_uuid` | `page`, `position` | `{uuid, moved}` |
+| `properties_set` | Set, add to, or remove page/block properties | `page` | `uuid`, `properties`, `mode` (`set`|`add`|`remove`) | `{target, page?, properties}` |
+| `journal_append` | Append an outline to a day's journal | `content`, `date` (YYYY-MM-DD, default today) | `{page, uuids}` |
+
+Property values: a string is written verbatim, a string array becomes `[[a]], [[b]]` links (creating backlinks), and `null` removes the property.
 
 ### Memory Operations
 
@@ -142,7 +155,7 @@ The Agent Bridge connects the Logseq plugin to the AI Hub server via SSE (Server
 | Skill Operations | 3 |
 | MCP Client Operations | 3 |
 | Secrets Operations | 3 |
-| Graph Operations | 7 |
+| Graph Operations | 16 |
 | Memory Operations | 4 |
 | Registry Operations | 5 |
 | Project Operations | 2 |
@@ -152,4 +165,4 @@ The Agent Bridge connects the Logseq plugin to the AI Hub server via SSE (Server
 | Work Log Operations | 1 |
 | Track/Task Operations | 7 |
 | Pi.dev Agent Profile Operations | 4 |
-| **Total** | **52** |
+| **Total** | **61** |

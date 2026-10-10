@@ -7,6 +7,7 @@ import type {
 import { buildSystemPrompt } from "./agent";
 import type { AgentBridge } from "./agent-bridge";
 import type { SessionStore } from "./session-store";
+import { renderPage, type PageReadResult } from "./mcp/graph-render";
 
 /**
  * Deep-merge two SessionContext objects.
@@ -278,7 +279,11 @@ export async function resolveRelevantPages(
       try {
         const data = await bridge.sendRequest("page_read", { name });
         clearTimeout(timer);
-        const content = typeof data === "string" ? data : JSON.stringify(data);
+        // page_read returns a {page, blocks} tree; render it the same way the
+        // page_read MCP tool does so this injected context reads like an
+        // outline, not a JSON dump. Non-contract-shaped data (e.g. a plain
+        // string) passes through untouched.
+        const content = typeof data === "string" ? data : renderPage(data as PageReadResult, { showUuids: false, maxBlocks: Infinity });
         resolve({ name, content });
       } catch (err) {
         clearTimeout(timer);
@@ -437,6 +442,10 @@ export function operationToAutoContextEvent(
       return { type: "page_modified", pageName: args.name as string };
     case "block_append":
       return { type: "page_modified", pageName: args.page as string };
+    case "block_insert":
+      // block_insert can target a page OR an existing block by uuid; only the
+      // page-targeted form tells us the page name without an extra lookup.
+      return args.page ? { type: "page_modified", pageName: args.page as string } : null;
     case "create_job":
       return {
         type: "job_created",

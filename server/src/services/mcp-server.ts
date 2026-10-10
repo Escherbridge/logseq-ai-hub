@@ -7,8 +7,19 @@ import type { McpSessionInfo } from "../types/mcp";
  * every per-session server below are built from this same shape.
  */
 const SERVER_INFO = { name: "logseq-ai-hub", version: "1.0.0" };
+
+/** Sent to every client on initialize; clients surface it to the model. Keep it short — it costs context in every session. */
+const SERVER_INSTRUCTIONS = `Logseq AI Hub exposes the user's Logseq graph. Graph tools need the Logseq plugin connected; "Plugin not connected" means ask the user to open Logseq.
+- Find before writing: graph_search (every term must match, case-insensitive); page_list filters by namespace, tag or property and excludes journals unless journals is "include" or "only".
+- page_read returns an outline where every block ends with ⟨uuid⟩. Pass those uuids to block_insert, block_update, block_move and block_delete; reference a block inside text as ((uuid)).
+- Write content as a markdown outline: "- " bullets, indent to nest. [[Page]] links and #tags create backlinks; "key:: value" lines are properties.
+- Connect pages with page_link (adds [[target]] to a property on the source, default "related"); inspect connections with page_links.
+- Page names are case-insensitive. page_create refuses an existing page unless if_exists is "append" or "skip".
+- On large pages use page_read's max_blocks, then block_get to drill into a branch.`;
+
 const SERVER_OPTIONS = {
   capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
+  instructions: SERVER_INSTRUCTIONS,
 };
 
 /**

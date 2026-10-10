@@ -15,6 +15,7 @@
             [logseq-ai-hub.code-repo.work :as work]
             [logseq-ai-hub.code-repo.tasks :as tasks]
             [logseq-ai-hub.code-repo.pi-agents :as pi-agents]
+            [logseq-ai-hub.graph-ops :as graph-ops]
             [clojure.string :as str]))
 
 ;; =============================================================================
@@ -245,97 +246,6 @@
       (js/Promise.reject "Missing required parameter: key"))))
 
 ;; =============================================================================
-;; Graph Operation Handlers
-;; =============================================================================
-
-(defn- handle-graph-query [params]
-  (let [query (get params "query")]
-    (if (str/blank? query)
-      (js/Promise.reject "Missing required parameter: query")
-      (-> (js/logseq.DB.datascriptQuery query)
-          (.then (fn [results]
-                   {:results (js->clj results :keywordize-keys true)}))))))
-
-(defn- handle-graph-search [params]
-  (let [query (get params "query")
-        limit (or (get params "limit") 50)]
-    (if (str/blank? query)
-      (js/Promise.reject "Missing required parameter: query")
-      (-> (js/logseq.DB.q query)
-          (.then (fn [results]
-                   (let [converted (js->clj results :keywordize-keys true)]
-                     {:results (take limit converted)
-                      :total (count converted)})))))))
-
-(defn- handle-page-read [params]
-  (let [page-name (get params "name")]
-    (if (str/blank? page-name)
-      (js/Promise.reject "Missing required parameter: name")
-      (-> (js/logseq.Editor.getPageBlocksTree page-name)
-          (.then (fn [blocks]
-                   (if blocks
-                     {:page page-name
-                      :blocks (js->clj blocks :keywordize-keys true)}
-                     (js/Promise.reject (str "Page not found: " page-name)))))))))
-
-(defn- handle-page-create [params]
-  (let [page-name (get params "name")
-        content (get params "content")
-        properties (or (get params "properties") {})]
-    (if (str/blank? page-name)
-      (js/Promise.reject "Missing required parameter: name")
-      (-> (js/logseq.Editor.createPage page-name
-            (clj->js properties)
-            (clj->js {:createFirstBlock (boolean content)}))
-          (.then (fn [_page]
-                   (if content
-                     (-> (js/logseq.Editor.appendBlockInPage page-name content)
-                         (.then (fn [_] {:page page-name :created true})))
-                     (js/Promise.resolve {:page page-name :created true}))))))))
-
-(defn- handle-page-list [params]
-  (let [pattern (or (get params "pattern") "")
-        limit (or (get params "limit") 100)
-        query (if (str/blank? pattern)
-                "[:find (pull ?p [:block/name :block/original-name])
-                  :where [?p :block/name _]]"
-                (str "[:find (pull ?p [:block/name :block/original-name])
-                       :where [?p :block/name ?name]
-                       [(clojure.string/includes? ?name \"" (memory/escape-datalog-string (str/lower-case pattern)) "\")]]"))]
-    (-> (js/logseq.DB.datascriptQuery query)
-        (.then (fn [results]
-                 (let [converted (js->clj results :keywordize-keys true)
-                       pages (mapv (fn [r] {:name (:name (first r))
-                                            :originalName (:original-name (first r))})
-                                   converted)]
-                   {:pages (take limit pages)
-                    :total (count pages)}))))))
-
-(defn- handle-block-append [params]
-  (let [page (get params "page")
-        content (get params "content")
-        properties (get params "properties")]
-    (if (or (str/blank? page) (str/blank? content))
-      (js/Promise.reject "Missing required parameters: page and content")
-      (-> (js/logseq.Editor.appendBlockInPage
-            page
-            (if properties
-              (str content "\n" (str/join "\n" (map (fn [[k v]] (str (name k) ":: " v)) properties)))
-              content))
-          (.then (fn [block]
-                   {:page page
-                    :blockUuid (when block (.-uuid block))}))))))
-
-(defn- handle-block-update [params]
-  (let [uuid (get params "uuid")
-        content (get params "content")]
-    (if (or (str/blank? uuid) (str/blank? content))
-      (js/Promise.reject "Missing required parameters: uuid and content")
-      (-> (js/logseq.Editor.updateBlock uuid content)
-          (.then (fn [_]
-                   {:uuid uuid :updated true}))))))
-
-;; =============================================================================
 ;; Memory Operation Handlers
 ;; =============================================================================
 
@@ -395,7 +305,9 @@
 ;; =============================================================================
 
 (def operation-handlers
-  "Map of operation names to handler functions."
+  "Map of operation names to handler functions. Graph ops live in graph-ops/handlers."
+  (merge
+  graph-ops/handlers
   {;; Job operations
    "create_job"         handle-create-job
    "list_jobs"          handle-list-jobs
@@ -416,14 +328,6 @@
    "list_secret_keys"   handle-list-secret-keys
    "set_secret"         handle-set-secret
    "remove_secret"      handle-remove-secret
-   ;; Graph operations (for MCP server)
-   "graph_query"        handle-graph-query
-   "graph_search"       handle-graph-search
-   "page_read"          handle-page-read
-   "page_create"        handle-page-create
-   "page_list"          handle-page-list
-   "block_append"       handle-block-append
-   "block_update"       handle-block-update
    ;; Memory operations (for MCP server)
    "store_memory"       handle-store-memory
    "recall_memory"      handle-recall-memory
@@ -461,11 +365,18 @@
    "pi_agent_list"          pi-agents/handle-pi-agent-list
    "pi_agent_get"           pi-agents/handle-pi-agent-get
    "pi_agent_create"        pi-agents/handle-pi-agent-create
-   "pi_agent_update"        pi-agents/handle-pi-agent-update})
+   "pi_agent_update"        pi-agents/handle-pi-agent-update}))
 
 ;; =============================================================================
 ;; Event Dispatcher
 ;; =============================================================================
+
+(defn run-operation
+  "Runs a handler as a promise. A synchronous throw (e.g. parameter validation)
+   becomes a rejection instead of escaping — escaping meant no callback was ever
+   sent and the server waited out its timeout."
+  [handler params]
+  (js/Promise. (fn [resolve _reject] (resolve (handler params)))))
 
 (defn dispatch-agent-request
   "Dispatches an agent request to the appropriate handler and sends the result back."
@@ -477,7 +388,7 @@
         handler (get operation-handlers operation)]
     (js/console.log "Agent request:" operation "id:" request-id "traceId:" trace-id)
     (if handler
-      (-> (js/Promise.resolve (handler params))
+      (-> (run-operation handler params)
           (.then (fn [result]
                    (send-callback! request-id true (clj->js result) nil trace-id)))
           (.catch (fn [err]

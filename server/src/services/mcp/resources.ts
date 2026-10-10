@@ -1,6 +1,7 @@
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpToolContext } from "../../types/mcp";
+import { renderPage, type PageReadResult } from "./graph-render";
 import { listContacts } from "../../db/contacts";
 import { listCharacters, getCharacter, getCharacterByName } from "../../db/characters";
 import { listCharacterSessions } from "../../db/character-sessions";
@@ -10,7 +11,7 @@ export function registerResources(server: McpServer, getContext: () => McpToolCo
   server.resource(
     "logseq-page",
     new ResourceTemplate("logseq://pages/{name}", { list: undefined }),
-    { description: "Content of a specific Logseq page", mimeType: "application/json" },
+    { description: "Content of a specific Logseq page, rendered as an indented markdown outline", mimeType: "text/markdown" },
     async (uri, variables) => {
       const ctx = getContext();
       const name = variables.name as string;
@@ -18,8 +19,8 @@ export function registerResources(server: McpServer, getContext: () => McpToolCo
         return { contents: [{ uri: uri.href, text: "Error: Logseq plugin not connected", mimeType: "text/plain" }] };
       }
       try {
-        const result = await ctx.bridge.sendRequest("page_read", { name }, ctx.traceId);
-        return { contents: [{ uri: uri.href, text: JSON.stringify(result, null, 2), mimeType: "application/json" }] };
+        const result = (await ctx.bridge.sendRequest("page_read", { name }, ctx.traceId)) as PageReadResult;
+        return { contents: [{ uri: uri.href, text: renderPage(result, { showUuids: true, maxBlocks: Infinity }), mimeType: "text/markdown" }] };
       } catch (err: any) {
         return { contents: [{ uri: uri.href, text: `Error: ${err.message}`, mimeType: "text/plain" }] };
       }

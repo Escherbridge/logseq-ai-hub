@@ -25,6 +25,7 @@ export function registerAllMcpHandlers(
   server: McpServer,
   getContext: () => McpToolContext,
 ): void {
+  // Graph operations (16 tools) -- see .omc/plans/graph-mcp-contract.md
   registerGraphTools(server, getContext);
   registerJobTools(server, getContext);
   registerMemoryTools(server, getContext);

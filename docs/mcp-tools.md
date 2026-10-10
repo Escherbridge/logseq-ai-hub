@@ -11,17 +11,30 @@ Logseq AI Hub exposes tools, resources, and prompt templates via the Model Conte
 ## Tools
 
 ### Graph Tools
-_Source: `graph-tools.ts`_
+_Source: `graph-tools.ts`; output rendering: `graph-render.ts`_
+
+Read tools return compact text, not JSON: outlines in which every block ends with `⟨uuid⟩`, and search hits with short snippets. Write tools return compact JSON. The server's `instructions` (sent on `initialize`) teach clients this workflow.
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `graph_query` | Run a Datalog query against the Logseq graph | `query` (string) |
-| `graph_search` | Full-text search across all Logseq pages | `query` (string), `limit` (number, opt, default 50) |
-| `page_read` | Read the full content of a Logseq page | `name` (string) |
-| `page_create` | Create a new Logseq page with optional content | `name` (string), `content` (string, opt), `properties` (Record<string,string>, opt) |
-| `page_list` | List Logseq pages matching a pattern | `pattern` (string, opt), `limit` (number, opt, default 100) |
-| `block_append` | Append a block to a Logseq page | `page` (string), `content` (string), `properties` (Record<string,string>, opt) |
-| `block_update` | Update an existing block's content | `uuid` (string), `content` (string) |
+| `graph_search` | Text search; every term must match, case-insensitive | `query`, `limit` (opt, 20), `page` (opt) |
+| `page_list` | List pages; filter by name, namespace, tag or property; paginated | `pattern`, `namespace`, `tag`, `property`, `journals`, `sort`, `limit`, `offset` (all opt) |
+| `page_read` | A page as an indented outline | `name`, `max_blocks` (opt, 200), `uuids` (opt, true) |
+| `block_get` | One block's subtree, to drill into a truncated page | `uuid`, `max_blocks`, `uuids` |
+| `page_links` | Outgoing links and backlinks | `name`, `direction` (opt), `limit` (opt) |
+| `graph_query` | Raw Datalog, for when the above can't express it | `query`, `limit` (opt, 100) |
+| `page_create` | Create a page from a markdown outline with properties | `name`, `content`, `properties`, `if_exists` |
+| `page_link` | Link one page to others via a property (default `related`) | `from`, `to` (string or array), `property`, `remove` |
+| `properties_set` | Set, add to, or remove page/block properties | `page` | `uuid`, `properties`, `mode` |
+| `block_insert` | Insert an outline at a page (end/start) or block (child/before/after) | `content`, `page` | `uuid`, `position` |
+| `block_update` | Replace content and/or set properties | `uuid`, `content`, `properties` |
+| `block_move` | Move a block next to/under another block, or onto a page | `uuid`, `target_uuid` | `page`, `position` |
+| `block_delete` | Delete blocks (and their children); all-or-nothing | `uuid` | `uuids` |
+| `page_rename` | Rename a page, updating references | `name`, `new_name` |
+| `page_delete` | Delete a page and its blocks | `name` |
+| `journal_append` | Append to a day's journal page | `content`, `date` (opt) |
+
+Read tools carry `readOnlyHint`; `page_delete` and `block_delete` carry `destructiveHint`.
 
 ### Job Tools
 _Source: `job-tools.ts`_
@@ -285,7 +298,7 @@ _Source: `prompts.ts`_
 | Category | Count |
 |----------|-------|
 | **Static Tools** | |
-| Graph Tools | 7 |
+| Graph Tools | 16 |
 | Job Tools | 10 |
 | Memory Tools | 4 |
 | Messaging Tools | 3 |
@@ -301,8 +314,9 @@ _Source: `prompts.ts`_
 | Work Tools | 4 |
 | Task Tools | 7 |
 | Pi.dev Tools | 9 |
-| Event Tools | 6 |
-| **Static Tools Total** | **88** |
+| Event Tools | 7 |
+| Hub Event Tools | 6 |
+| **Static Tools Total** | **104** |
 | **Resources** | **13** |
 | **Prompt Templates** | **7** |
 | **Dynamic (runtime)** | **Varies by knowledge base content** |

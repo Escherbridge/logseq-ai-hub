@@ -186,41 +186,6 @@
         100))))
 
 ;; ---------------------------------------------------------------------------
-;; Graph Query Operation Tests
-;; Regression guard: js/logseq.DB.datascriptQuery strips the datalog namespace
-;; from pulled entity keys (:block/name -> "name"). page_list must read the
-;; stripped keys, or every page comes back with :name/:originalName nil.
-;; ---------------------------------------------------------------------------
-
-(deftest test-page-list-returns-real-page-names
-  (setup-mocks!)
-  (testing "page_list reads the namespace-stripped datascriptQuery shape"
-    (set! (.-datascriptQuery (.-DB js/logseq))
-          (fn [_q]
-            (js/Promise.resolve
-              (clj->js [[{"name" "stored-at" "original-name" "stored-at"}]
-                        [{"name" "may 9th, 2025" "original-name" "May 9th, 2025"}]]))))
-    (async done
-      (bridge/dispatch-agent-request
-        {"requestId" "req-page-list"
-         "operation" "page_list"
-         "params" {}})
-      (js/setTimeout
-        (fn []
-          (is (pos? (count @callback-calls)))
-          (when (pos? (count @callback-calls))
-            (let [{:keys [body]} (first @callback-calls)
-                  pages (get-in body [:data :pages])]
-              (is (= 2 (count pages))
-                  "both pulled pages should survive conversion")
-              (is (every? #(some? (:name %)) pages)
-                  "every page must have a non-nil :name (would be nil if reading :block/name)")
-              (is (= "May 9th, 2025" (:originalName (second pages)))
-                  "originalName should be the real page name, not nil")))
-          (done))
-        100))))
-
-;; ---------------------------------------------------------------------------
 ;; Secrets Operation Tests (FR-6)
 ;; ---------------------------------------------------------------------------
 

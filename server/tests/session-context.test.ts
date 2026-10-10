@@ -493,13 +493,19 @@ describe("resolveRelevantPages", () => {
     expect(result.size).toBe(0);
   });
 
-  it("should convert non-string results to string", async () => {
+  it("should convert non-string (contract-shaped page_read) results to a rendered outline string", async () => {
     const bridge = makeMockBridge({
-      "Page1": { blocks: [{ content: "block 1" }] },
+      "Page1": {
+        page: { name: "Page1", uuid: "page-uuid-1", journal: false },
+        blocks: [{ uuid: "b1", content: "block 1", children: [] }],
+      },
     });
     const result = await resolveRelevantPages(bridge, ["Page1"]);
     expect(result.size).toBe(1);
     expect(typeof result.get("Page1")).toBe("string");
+    expect(result.get("Page1")).toContain("block 1");
+    // showUuids: false for injected prompt context -- no ⟨uuid⟩ markers
+    expect(result.get("Page1")).not.toContain("b1");
   });
 });
 

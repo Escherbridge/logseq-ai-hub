@@ -2,8 +2,10 @@
 {:source-paths
  ["src/main" "src/test" "src/dev"]
 
+ ;; datascript: test-only — backs the fake Logseq host (src/test/.../fake_logseq.cljs).
+ ;; Never required from src/main, so it is not compiled into main.js.
  :dependencies
- []
+ [[datascript "1.4.2"]]
 
  :dev-http {8080 "./"}
 

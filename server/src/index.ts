@@ -65,7 +65,7 @@ dynamicRegistry = new DynamicRegistry(mcpServer, getContext);
 
 // Every MCP session needs its own McpServer instance (the SDK forbids
 // attaching a second transport to an already-connected Protocol) but must
-// still see the full 95-tool static catalogue plus any dynamic KB tools
+// still see the full 104-tool static catalogue plus any dynamic KB tools
 // registered so far. This factory builds that per-session server and
 // attaches it to the shared DynamicRegistry so future syncFromBridge()
 // notifications reach it too; mcp-transport.ts calls it per new session
