@@ -47,7 +47,7 @@ jobs:
           fi
 
       - name: Build plugin (shadow-cljs release)
-        run: npx shadow-cljs release app
+        run: npx shadow-cljs release app && node scripts/stamp-build.js
 
       - name: Assemble plugin package
         run: |

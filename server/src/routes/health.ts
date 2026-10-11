@@ -37,6 +37,7 @@ export function handleHealth(
     agentApi: {
       enabled: true,
       pluginConnected: bridge?.isPluginConnected() ?? false,
+      pluginBuild: sseManager.builds.at(-1) ?? null,
       pendingRequests: bridge?.pendingCount ?? 0,
     },
     mcp: {

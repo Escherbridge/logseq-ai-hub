@@ -11,10 +11,11 @@ export function handleSSE(req: Request, config: Config): Response {
   }
 
   const clientId = crypto.randomUUID();
+  const build = url.searchParams.get("build");
 
   const stream = new ReadableStream({
     start(controller) {
-      sseManager.addClient(clientId, controller);
+      sseManager.addClient(clientId, controller, build);
 
       // Send initial connected event
       const encoder = new TextEncoder();

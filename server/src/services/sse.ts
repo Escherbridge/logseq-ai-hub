@@ -3,6 +3,8 @@ import type { SSEEvent } from "../types";
 interface SSEClient {
   id: string;
   controller: ReadableStreamDefaultController;
+  /** Plugin build stamp sent on connect (scripts/stamp-build.js), or null for older plugins. */
+  build: string | null;
 }
 
 /** Seconds between SSE heartbeats. Bun.serve's idleTimeout is derived from this in src/index.ts. */
@@ -31,8 +33,13 @@ export class SSEManager {
     this.clients.clear();
   }
 
-  addClient(id: string, controller: ReadableStreamDefaultController): void {
-    this.clients.set(id, { id, controller });
+  addClient(id: string, controller: ReadableStreamDefaultController, build: string | null = null): void {
+    this.clients.set(id, { id, controller, build });
+  }
+
+  /** Build stamps of the connected plugins, newest connection last. */
+  get builds(): (string | null)[] {
+    return [...this.clients.values()].map((c) => c.build);
   }
 
   removeClient(id: string): void {

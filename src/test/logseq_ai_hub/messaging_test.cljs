@@ -165,7 +165,7 @@
     (is (= "test-token" (:api-token @messaging/state)))
     (is (= 1 (count @mock-es-instances)))
     (let [es (first @mock-es-instances)]
-      (is (= "http://localhost:3000/events?token=test-token" (.-url es))))))
+      (is (= "http://localhost:3000/events?token=test-token&build=unstamped" (.-url es))))))
 
 (deftest test-connect-ignores-blank-params
   (setup-mocks!)

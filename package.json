@@ -32,7 +32,7 @@
   },
   "scripts": {
     "watch": "npx shadow-cljs watch app",
-    "release": "npx shadow-cljs release app && npm run verify:fresh",
+    "release": "npx shadow-cljs release app && node scripts/stamp-build.js && npm run verify:fresh",
     "test": "npx shadow-cljs compile node-test && node out/test/node-tests.js && npm run verify:fresh",
     "test:compile": "npx shadow-cljs compile node-test",
     "test:run": "node out/test/node-tests.js",

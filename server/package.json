@@ -14,7 +14,8 @@
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:live": "LIVE_LOGSEQ=1 bun test --timeout 120000 tests/graph-live.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0"

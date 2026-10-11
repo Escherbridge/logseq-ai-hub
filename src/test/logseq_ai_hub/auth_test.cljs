@@ -200,7 +200,7 @@
                :close (fn [] nil)}))
       (try
         (messaging/connect!)
-        (is (= "https://h.example/events?token=jwt-xyz" @captured-url)
+        (is (= "https://h.example/events?token=jwt-xyz&build=unstamped" @captured-url)
             "SSE URL should carry the resolved JWT, not pluginApiToken")
         (finally
           (set! js/EventSource orig-event-source)

@@ -47,7 +47,9 @@
       nil)))
 
 (defn- build-sse-url [server-url api-token]
-  (str server-url "/events?token=" (js/encodeURIComponent api-token)))
+  ;; build: the stamp scripts/stamp-build.js puts on main.js, so the server can tell which build is running.
+  (str server-url "/events?token=" (js/encodeURIComponent api-token)
+       "&build=" (js/encodeURIComponent (or (aget js/globalThis "AI_HUB_BUILD") "unstamped"))))
 
 (defn- platform-display [platform]
   (case platform
