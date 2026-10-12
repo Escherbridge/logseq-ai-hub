@@ -21,8 +21,10 @@ export function registerJobTools(server: McpServer, getContext: () => McpToolCon
     "Create a new job in the Logseq job runner",
     {
       name: z.string().describe("Job name"),
-      type: z.enum(["one-time", "scheduled", "triggered"]).describe("Job type"),
-      skill: z.string().optional().describe("Skill to execute"),
+      type: z
+        .enum(["autonomous", "manual", "scheduled", "event-driven"])
+        .describe("Job type. autonomous = run as soon as the job runner picks it up"),
+      skill: z.string().optional().describe("Skill page to execute, e.g. 'Skills/summarize'"),
       priority: z.number().min(1).max(5).optional().describe("Priority 1-5 (1=highest)"),
       schedule: z.string().optional().describe("Cron schedule (required for scheduled type)"),
       input: z.record(z.string(), z.unknown()).optional().describe("Input parameters for the job"),
@@ -92,13 +94,32 @@ export function registerJobTools(server: McpServer, getContext: () => McpToolCon
 
   server.tool(
     "skill_create",
-    "Create a new skill definition in the Logseq job runner",
+    "Create a skill (Skills/<name>) with its steps. Steps run in order; templates use {{input-name}} and {{step-N-result}}",
     {
       name: z.string().describe("Skill name"),
-      type: z.string().describe("Skill type (e.g. 'automation', 'query', 'transform')"),
+      type: z.enum(["llm-chain", "tool-chain", "composite", "mcp-tool"]).describe("Skill type"),
       description: z.string().describe("Skill description"),
       inputs: z.array(z.string()).optional().describe("Expected input parameter names"),
       outputs: z.array(z.string()).optional().describe("Expected output parameter names"),
+      steps: z
+        .array(
+          z.object({
+            order: z.number().int().min(1).describe("Execution order, starting at 1"),
+            action: z
+              .enum([
+                "graph-query", "llm-call", "block-insert", "block-update", "page-create", "mcp-tool",
+                "mcp-resource", "transform", "conditional", "sub-skill", "legacy-task",
+              ])
+              .describe("Step action"),
+            prompt_template: z.string().optional().describe("llm-call prompt, e.g. 'Summarise: {{text}}'"),
+            model: z.string().optional().describe("Model override for llm-call"),
+            config: z.record(z.string(), z.unknown()).optional().describe("Action config, e.g. {query} for graph-query"),
+            mcp_server: z.string().optional().describe("mcp-tool: server id"),
+            mcp_tool: z.string().optional().describe("mcp-tool: tool name"),
+          }),
+        )
+        .optional()
+        .describe("Steps, written as blocks on the skill page"),
     },
     async (params) => bridgeTool("create_skill", params),
   );

@@ -11,33 +11,31 @@
     (catch :default _
       s)))
 
-(defn- detect-and-parse-value
-  "Detects value type and parses accordingly:
-   - JSON objects/arrays (starts with { or [) -> parse to map/vector
-   - Comma-separated values -> split to vector
-   - Otherwise -> return as string"
-  [value]
-  (let [trimmed (str/trim value)]
-    (cond
-      ;; JSON object or array
-      (or (str/starts-with? trimmed "{")
-          (str/starts-with? trimmed "["))
-      (try-parse-json trimmed)
+(defn- property-types
+  "{property-key schema-type} for a property schema."
+  [schema]
+  (into {} (map (fn [[k spec]] [k (:type spec)])) schema))
 
-      ;; CSV - contains comma
-      (str/includes? trimmed ",")
-      (mapv str/trim (str/split trimmed #","))
+(def ^:private job-runner-property-types
+  (property-types (merge schemas/job-properties-schema
+                         schemas/skill-properties-schema
+                         schemas/step-properties-schema)))
 
-      ;; Known CSV fields (even without commas) - convert to single-element vector
-      ;; This handles cases like "skill-inputs:: single-value"
-      :else
-      trimmed)))
+(defn- parse-value
+  "Parses a raw value by its schema type (see AGENTS.md §job-runner-shape):
+   :csv -> vector (JSON array or comma-split); :string/:enum/:integer -> trimmed
+   string, commas and brackets kept; other keys -> JSON when it parses, else string."
+  [type value]
+  (let [trimmed (str/trim value)
+        json? (or (str/starts-with? trimmed "{") (str/starts-with? trimmed "["))]
+    (case type
+      :csv (let [parsed (when json? (try-parse-json trimmed))]
+             (if (vector? parsed) parsed (mapv str/trim (str/split trimmed #","))))
+      (:string :enum :integer) trimmed
+      (if json? (try-parse-json trimmed) trimmed))))
 
-(defn parse-block-properties
-  "Extracts key:: value pairs from block content string.
-   Returns map of keyword keys to parsed values.
-   Handles multiline values, JSON, and CSV."
-  [block-content]
+(defn- parse-block-properties*
+  [block-content types]
   (if (or (nil? block-content) (str/blank? block-content))
     {}
     (let [lines (str/split-lines block-content)
@@ -64,16 +62,17 @@
         (swap! properties assoc @current-key
                (str/trim (str/join " " @current-value))))
 
-      ;; Post-process values: detect and parse JSON/CSV
-      (into {} (map (fn [[k v]]
-                      (let [parsed (detect-and-parse-value v)]
-                        ;; Special handling for known CSV fields
-                        (if (and (string? parsed)
-                                 (#{:skill-inputs :skill-outputs :skill-tags
-                                    :job-depends-on} k))
-                          [k [parsed]]  ;; Wrap single value in vector
-                          [k parsed])))
-                    @properties)))))
+      (into {} (map (fn [[k v]] [k (parse-value (get types k) v)]))
+            @properties))))
+
+(defn parse-block-properties
+  "Extracts key:: value pairs from block content string.
+   Returns map of keyword keys to values parsed by the schema's types
+   (default: the job/skill/step schemas). Handles multiline values."
+  ([block-content]
+   (parse-block-properties* block-content job-runner-property-types))
+  ([block-content schema]
+   (parse-block-properties* block-content (property-types schema))))
 
 (defn- coerce-property-types
   "Coerces string property values to their expected types based on schema."

@@ -9,11 +9,11 @@
                                               (case page-name
                                                 "Jobs/Test Job"
                                                 #js [#js {:content "job-name:: Test Job"
-                                                         :children #js [#js {:content "step 1: llm-call"}
-                                                                       #js {:content "step 2: block-insert"}]}]
+                                                         :children #js [#js {:content "step-order:: 1\nstep-action:: llm-call"}
+                                                                       #js {:content "step-order:: 2\nstep-action:: block-insert"}]}]
                                                 "Skills/Test Skill"
                                                 #js [#js {:content "skill-name:: Test Skill"
-                                                         :children #js [#js {:content "step 1: graph-query"}]}]
+                                                         :children #js [#js {:content "step-order:: 1\nstep-action:: graph-query"}]}]
                                                 "Jobs/Test 1"
                                                 #js [#js {:content "" :children nil}]
                                                 "Jobs/Test 2"

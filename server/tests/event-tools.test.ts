@@ -523,14 +523,20 @@ describe("registerEventTools", () => {
       registerEventTools(server, () => ({ db, config: testConfig, eventBus }));
       const tools = getRegisteredTools(server);
 
-      // Empty allowlist = all allowed. Will fail at fetch but pass validation.
-      const result = await tools["http_request"].handler({
-        url: "https://any-domain.example.com/api",
-        timeout: 100,
-      });
-
-      if (result.isError) {
-        expect(result.content[0].text).not.toContain("not in the HTTP allowlist");
+      // Empty allowlist = all allowed, matching the plugin's httpAllowlist. Fake only the network edge.
+      const realFetch = globalThis.fetch;
+      const requested: string[] = [];
+      globalThis.fetch = (async (url: string) => {
+        requested.push(String(url));
+        return Response.json({ pong: true });
+      }) as unknown as typeof fetch;
+      try {
+        const result = await tools["http_request"].handler({ url: "https://any-domain.example.com/api" });
+        expect(result.isError).toBeFalsy();
+        expect(requested).toEqual(["https://any-domain.example.com/api"]);
+        expect(result.content[0].text).toContain("pong");
+      } finally {
+        globalThis.fetch = realFetch;
       }
     });
   });

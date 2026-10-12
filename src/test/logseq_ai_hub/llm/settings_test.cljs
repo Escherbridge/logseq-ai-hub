@@ -95,6 +95,10 @@
         (-> ((agent/make-llm-handler) "hello" nil)
             (.then (fn [msg]
                      (set! (.-fetch js/globalThis) orig-fetch)
+                     (is false (str "a missing key must reject, not resolve: " msg))
+                     (done))
+                   (fn [err]
+                     (set! (.-fetch js/globalThis) orig-fetch)
                      (is (false? @called?) "must not call the provider with a blank key")
-                     (is (re-find #"API Key is missing" msg))
+                     (is (re-find #"API Key is missing" (.-message err)))
                      (done))))))))

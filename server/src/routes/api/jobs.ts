@@ -34,7 +34,8 @@ export async function handleCreateJob(
     broadcastJobEvent("job_created", {
       name: validation.data.name,
       jobId: `Jobs/${validation.data.name}`,
-      status: "queued",
+      // The plugin decides: queued (autonomous/event-driven), created (manual) or scheduled.
+      status: (result as { status?: string } | null)?.status ?? "queued",
       timestamp: new Date().toISOString(),
     });
     return successResponse(result, 201);

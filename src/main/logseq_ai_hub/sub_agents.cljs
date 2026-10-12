@@ -121,7 +121,7 @@
             (.catch (fn [err]
                       (js/console.error "Agent command error:" err)
                       (js/logseq.Editor.insertBlock block-uuid
-                        (str "Error: " (.-message err))))))))))
+                        (agent/failure-display-text err)))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Registration

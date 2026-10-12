@@ -50,7 +50,7 @@ _Source: `job-tools.ts`_
 | `job_resume` | Resume a paused job | `jobId` (string) |
 | `skill_list` | List all available skills in the Logseq job runner | _(none)_ |
 | `skill_get` | Get detailed information about a specific skill | `skillId` (string) |
-| `skill_create` | Create a new skill definition in the Logseq job runner | `name` (string), `type` (string), `description` (string), `inputs` (string[], opt), `outputs` (string[], opt) |
+| `skill_create` | Create a skill page with its steps. Templates use `{{input}}` and `{{step-N-result}}` | `name` (string), `type` (enum: llm-chain|tool-chain|composite|mcp-tool), `description` (string), `inputs` (string[], opt), `outputs` (string[], opt), `steps` ({order, action, prompt_template?, model?, config?, mcp_server?, mcp_tool?}[], opt) |
 
 ### Memory Tools
 _Source: `memory-tools.ts`_
@@ -212,7 +212,7 @@ _Source: `event-tools.ts`_
 | `event_sources` | List unique event sources from the Event Hub | -- |
 | `event_recent` | Get recent events from the Event Hub | `limit` (number, opt) |
 | `webhook_test` | Send a test webhook event to the Event Hub for testing subscriptions and pipelines | `source` (string), `data` (Record, opt) |
-| `http_request` | Make an HTTP request (for agent use). URLs are validated against `HTTP_ALLOWLIST`; HTTPS enforced except for localhost | `url` (string), `method` (string, opt), `headers` (Record<string,string>, opt), `body` (string, opt), `timeout` (number, opt) |
+| `http_request` | Make an HTTP request (for agent use). URLs are validated against `HTTP_ALLOWLIST` (empty = any host, matching the plugin); HTTPS enforced except for localhost | `url` (string), `method` (string, opt), `headers` (Record<string,string>, opt), `body` (string, opt), `timeout` (number, opt) |
 
 ### Character Hub Event Tools
 _Source: `hub-event-tools.ts`_

@@ -156,6 +156,14 @@
           [job remaining] (queue/dequeue q2 {} 10 #{})]
       (is (= job1 job))))
 
+  (testing "dequeue skips an entry whose job is already running"
+    (let [job1 {:job-id "Jobs/job1" :priority 1 :created-at "2026-02-19T10:00:00Z" :depends-on #{}}
+          job2 {:job-id "Jobs/job2" :priority 2 :created-at "2026-02-19T10:01:00Z" :depends-on #{}}
+          q (-> (queue/make-queue) (queue/enqueue job1) (queue/enqueue job2))
+          [job remaining] (queue/dequeue q {"Jobs/job1" :running} 3 #{"Jobs/job1"})]
+      (is (= job2 job) "the higher-priority job1 is mid-run, so job2 goes next")
+      (is (= [job1] remaining))))
+
   (testing "dequeue returns nil when all jobs blocked"
     (let [q (queue/make-queue)
           job1 {:job-id "Jobs/job1" :priority 1 :created-at "2026-02-19T10:00:00Z" :depends-on #{"Jobs/dep1"}}

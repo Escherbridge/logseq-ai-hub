@@ -28,7 +28,7 @@
   "Parses a tool page's first block content into a registry tool entry.
    Returns {:valid true :entry {...}} or {:valid false :errors [...]}"
   [page-name block-content]
-  (let [raw-props (block-parser/parse-block-properties block-content)
+  (let [raw-props (block-parser/parse-block-properties block-content schemas/tool-properties-schema)
         typed-props (coerce-property-types schemas/tool-properties-schema raw-props)
         validation (schemas/validate-properties schemas/tool-properties-schema typed-props)]
     (if (:valid validation)
@@ -67,7 +67,7 @@
    Extracts properties from the first block and ## System/## User sections from body.
    Returns {:valid true :entry {...}} or {:valid false :errors [...]}"
   [page-name block-content]
-  (let [raw-props (block-parser/parse-block-properties block-content)
+  (let [raw-props (block-parser/parse-block-properties block-content schemas/prompt-properties-schema)
         typed-props (coerce-property-types schemas/prompt-properties-schema raw-props)
         validation (schemas/validate-properties schemas/prompt-properties-schema typed-props)
         sections (extract-prompt-sections block-content)]
@@ -91,7 +91,7 @@
    Extracts properties and body steps from block content.
    Returns {:valid true :entry {...}} or {:valid false :errors [...]}"
   [page-name block-content]
-  (let [raw-props (block-parser/parse-block-properties block-content)
+  (let [raw-props (block-parser/parse-block-properties block-content schemas/procedure-properties-schema)
         typed-props (coerce-property-types schemas/procedure-properties-schema raw-props)
         validation (schemas/validate-properties schemas/procedure-properties-schema typed-props)
         ;; Extract body (non-property, non-tag lines) as procedure steps

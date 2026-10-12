@@ -59,15 +59,31 @@
 ;; LLM Model
 ;; -----------------------------------------------------------------------------
 
+(defn- llm-failure
+  "An Error for a failed LLM call; its displayText is what /LLM shows the user."
+  [message display-text]
+  (doto (js/Error. message) (aset "displayText" display-text)))
+
+(defn failure-display-text
+  "Block text /LLM inserts for a rejected call: an LLM failure's displayText, else \"Error: <message>\"."
+  [err]
+  (or (when (some? err) (aget err "displayText"))
+      (str "Error: " (if (instance? js/Error err) (.-message err) (str err)))))
+
 (defn make-llm-handler
   "Creates an LLM API handler with an optional system prompt.
-   Returns a function with signature [input model-id] -> Promise<string>."
+   Returns a function with signature [input model-id] -> Promise<string>, which
+   rejects (never resolves an error string) when the call fails. A model-id that is
+   not a registered handler id is sent as the provider model; otherwise the
+   'LLM Model' setting is."
   ([]
    (make-llm-handler nil))
   ([system-prompt]
-   (fn [input _model-id]
+   (fn [input model-id]
      (let [api-key (llm-settings/api-key)
-           model-name (llm-settings/model)
+           model-name (if (or (str/blank? model-id) (get-model model-id))
+                        (llm-settings/model)
+                        model-id)
            url (llm-settings/chat-completions-url)
            messages (cond-> []
                       (not (str/blank? system-prompt))
@@ -76,7 +92,9 @@
                       (conj {:role "user" :content input}))]
 
        (if (nil? api-key)
-         (js/Promise.resolve "⚠️ **Error**: LLM API Key is missing. Please check Plugin Settings.")
+         (js/Promise.reject
+          (llm-failure "LLM API Key is missing. Please check Plugin Settings."
+                       "⚠️ **Error**: LLM API Key is missing. Please check Plugin Settings."))
          (-> (js/fetch url
                        (clj->js {:method "POST"
                                  :headers {"Content-Type" "application/json"
@@ -101,7 +119,9 @@
                           text))))
              (.catch (fn [err]
                        (js/console.error "LLM Handler Error:" err)
-                       (str "⚠️ **Error calling LLM API**: " (.-message err))))))))))
+                       (let [message (if (instance? js/Error err) (.-message err) (str err))]
+                         (throw (llm-failure message
+                                             (str "⚠️ **Error calling LLM API**: " message))))))))))))
 
 (def llm-handler
   "Default LLM handler with no system prompt."

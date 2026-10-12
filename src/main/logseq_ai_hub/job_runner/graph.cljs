@@ -18,18 +18,44 @@
     (swap! write-queue-state assoc :promise new-promise)
     new-promise))
 
+(defn- step-block?
+  "True for a block with a step-action:: property line."
+  [block]
+  (boolean (re-find #"(?m)^\s*step-action::" (or (.-content block) ""))))
+
 (defn- extract-block-content
-  "Extracts content from a block tree structure.
-   Returns a tuple of [first-block-content child-contents]"
+  "[first-block-content step-contents]. Steps are the first block's step children, else
+   the later top-level step blocks (see AGENTS.md §job-runner-shape)."
   [blocks]
   (when (and blocks (pos? (.-length blocks)))
     (let [first-block (aget blocks 0)
-          content (.-content first-block)
-          children (.-children first-block)
-          child-contents (when children
-                          (js->clj
-                            (.map children #(.-content %))))]
-      [content child-contents])))
+          child-steps (filter step-block? (array-seq (or (.-children first-block) #js [])))
+          step-blocks (if (seq child-steps)
+                        child-steps
+                        (filter step-block? (rest (array-seq blocks))))]
+      [(.-content first-block) (mapv #(.-content %) step-blocks)])))
+
+(defn strip-page-link
+  "\"[[Skills/x]]\" -> \"Skills/x\"; anything else is returned trimmed."
+  [s]
+  (when (string? s)
+    (let [t (str/trim s)]
+      (if-let [[_ inner] (re-matches #"^\[\[(.+)\]\]$" t)] inner t))))
+
+(defn- flatten-definition
+  "Merges :properties into the top level, keeping :properties (AGENTS.md §job-runner-shape)."
+  [definition]
+  (when definition
+    (merge (:properties definition) definition)))
+
+(defn- normalize-job-skill
+  [job-def]
+  (if-let [skill (:job-skill job-def)]
+    (let [page (strip-page-link (str skill))]
+      (-> job-def
+          (assoc :job-skill page)
+          (assoc-in [:properties :job-skill] page)))
+    job-def))
 
 (defn read-job-page
   "Reads and parses a job definition from a Logseq page.
@@ -38,7 +64,9 @@
   (-> (js/logseq.Editor.getPageBlocksTree page-name)
       (.then (fn [blocks]
                (if-let [[content children] (extract-block-content blocks)]
-                 (parser/parse-job-definition content children page-name)
+                 (-> (parser/parse-job-definition content children page-name)
+                     flatten-definition
+                     normalize-job-skill)
                  nil)))
       (.catch (fn [err]
                 (js/console.error "Error reading job page:" err)
@@ -51,7 +79,8 @@
   (-> (js/logseq.Editor.getPageBlocksTree page-name)
       (.then (fn [blocks]
                (if-let [[content children] (extract-block-content blocks)]
-                 (parser/parse-skill-definition content children page-name)
+                 (flatten-definition
+                   (parser/parse-skill-definition content children page-name))
                  nil)))
       (.catch (fn [err]
                 (js/console.error "Error reading skill page:" err)
@@ -124,11 +153,12 @@
                      (js/logseq.Editor.upsertBlockProperty uuid property-key value))))))))
 
 (defn append-job-log!
-  "Appends a log entry as a child block with timestamp.
-   Uses the write queue to prevent conflicts."
+  "Appends a log entry as a top-level block with timestamp.
+   Uses the write queue to prevent conflicts. \"::\" collapses to \":\" so a log line
+   (often an error message) can never parse as a property or a step."
   [page-name log-entry]
   (queue-write!
     (fn []
       (let [now (.toISOString (js/Date.))
-            content (str log-entry " [" now "]")]
+            content (str (str/replace (str log-entry) #"::+" ":") " [" now "]")]
         (js/logseq.Editor.appendBlockInPage page-name content)))))

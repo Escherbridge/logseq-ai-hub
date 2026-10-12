@@ -41,6 +41,31 @@ function resolveBaseUrl(): string {
   return "";
 }
 
+/**
+ * HTTP_ALLOWLIST: a JSON array of host patterns, or a comma-separated list. Empty means any host.
+ * Anything else throws: a typo must never silently become "allow all".
+ */
+export function parseHttpAllowlist(raw: string | undefined): string[] {
+  const value = (raw ?? "").trim();
+  if (!value) return [];
+  if (value.startsWith("[")) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw new Error(`HTTP_ALLOWLIST is not valid JSON: ${value}`);
+    }
+    if (!Array.isArray(parsed) || !parsed.every((p) => typeof p === "string" && p.trim())) {
+      throw new Error(`HTTP_ALLOWLIST must be an array of host patterns, got: ${value}`);
+    }
+    return parsed.map((p: string) => p.trim());
+  }
+  if (/[\s{}"]/.test(value.replace(/,\s+/g, ","))) {
+    throw new Error(`HTTP_ALLOWLIST must be a JSON array or comma-separated hosts, got: ${value}`);
+  }
+  return value.split(",").map((p) => p.trim()).filter(Boolean);
+}
+
 export function loadConfig(): Config {
   return {
     port: parseInt(process.env.PORT || "3000", 10),
@@ -57,14 +82,7 @@ export function loadConfig(): Config {
     sessionMessageLimit: parseInt(process.env.SESSION_MESSAGE_LIMIT || "50", 10),
     eventRetentionDays: parseInt(process.env.EVENT_RETENTION_DAYS || "30", 10),
     webhookSecret: process.env.WEBHOOK_SECRET || "",
-    httpAllowlist: (() => {
-      try {
-        const raw = process.env.HTTP_ALLOWLIST || "[]";
-        return JSON.parse(raw) as string[];
-      } catch {
-        return [] as string[];
-      }
-    })(),
+    httpAllowlist: parseHttpAllowlist(process.env.HTTP_ALLOWLIST),
     listLimitMax: Math.max(1, parseInt(process.env.LIST_LIMIT_MAX || "100", 10)),
     llmHttpReferer: process.env.LLM_HTTP_REFERER || "",
     llmTitle: process.env.LLM_TITLE || "",

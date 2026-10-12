@@ -1,5 +1,6 @@
 (ns logseq-ai-hub.job-runner.runner-test
   (:require [cljs.test :refer-macros [deftest is testing async]]
+            [logseq-ai-hub.job-runner.queue :as queue]
             [logseq-ai-hub.job-runner.runner :as runner]
             [logseq-ai-hub.util.errors :as errors]))
 
@@ -61,50 +62,15 @@
 (defn set-skill-result! [skill-name result]
   (swap! mock-engine-state assoc-in [:skill-results skill-name] result))
 
-;; Mock queue module
-(def mock-queue-state (atom {}))
-
-(defn reset-mock-queue! []
-  (reset! mock-queue-state
-          {:queues {}
-           :enqueue-calls []
-           :dequeue-calls []
-           :remove-calls []}))
-
-(defn mock-make-queue []
-  {:items (atom [])})
-
-(defn mock-enqueue [queue entry]
-  (swap! mock-queue-state update :enqueue-calls conj entry)
-  (swap! (:items queue) conj entry))
-
-(defn mock-dequeue [queue status-map max-concurrent running-set]
-  (swap! mock-queue-state update :dequeue-calls conj
-         {:status-map status-map :max-concurrent max-concurrent :running-count (count running-set)})
-  (let [items @(:items queue)
-        eligible (first (filter
-                         (fn [entry]
-                           (and
-                            ;; Not already running or completed
-                            (not (contains? running-set (:job-id entry)))
-                            (not (contains? status-map (:job-id entry)))
-                            ;; Dependencies met
-                            (every? #(= :completed (get status-map %))
-                                   (:depends-on entry))))
-                         items))]
-    (when eligible
-      (swap! (:items queue) (fn [items] (vec (remove #(= (:job-id %) (:job-id eligible)) items)))))
-    eligible))
-
-(defn mock-remove-from-queue [queue id]
-  (swap! mock-queue-state update :remove-calls conj id)
-  (swap! (:items queue) (fn [items] (vec (remove #(= (:job-id %) id) items)))))
-
-(defn mock-queue-size [queue]
-  (count @(:items queue)))
-
-(defn mock-find-in-queue [queue id]
-  (first (filter #(= (:job-id %) id) @(:items queue))))
+;; The queue is the real, pure queue module (no I/O, nothing to fake). An earlier
+;; mutating mock encoded a different API and hid that the runner dropped every enqueue.
+(defn- use-real-queue! []
+  (set! runner/queue-make-queue queue/make-queue)
+  (set! runner/queue-enqueue queue/enqueue)
+  (set! runner/queue-dequeue queue/dequeue)
+  (set! runner/queue-remove-from-queue queue/remove-from-queue)
+  (set! runner/queue-queue-size queue/queue-size)
+  (set! runner/queue-find-in-queue queue/find-in-queue))
 
 ;; Helper to create mock job
 (defn make-mock-job
@@ -134,13 +100,10 @@
   "Wire mocks needed for enqueue-job! tests."
   []
   (reset-mock-graph!)
-  (reset-mock-queue!)
+  (use-real-queue!)
   (runner/reset-runner!)
   (set! runner/graph-read-job-page mock-read-job-page)
-  (set! runner/graph-update-job-status! mock-update-job-status!)
-  (set! runner/queue-enqueue mock-enqueue)
-  (set! runner/queue-make-queue mock-make-queue)
-  (set! runner/queue-remove-from-queue mock-remove-from-queue))
+  (set! runner/graph-update-job-status! mock-update-job-status!))
 
 (defn- setup-execute-mocks!
   "Wire mocks needed for execute-job! tests."
@@ -160,7 +123,7 @@
   []
   (reset-mock-graph!)
   (reset-mock-engine!)
-  (reset-mock-queue!)
+  (use-real-queue!)
   (runner/reset-runner!)
   (set! runner/graph-read-job-page mock-read-job-page)
   (set! runner/graph-read-skill-page mock-read-skill-page)
@@ -168,11 +131,7 @@
   (set! runner/graph-update-job-status! mock-update-job-status!)
   (set! runner/graph-update-job-property! mock-update-job-property!)
   (set! runner/graph-append-job-log! mock-append-job-log!)
-  (set! runner/engine-execute-skill-with-retries mock-execute-skill-with-retries)
-  (set! runner/queue-enqueue mock-enqueue)
-  (set! runner/queue-dequeue mock-dequeue)
-  (set! runner/queue-make-queue mock-make-queue)
-  (set! runner/queue-remove-from-queue mock-remove-from-queue))
+  (set! runner/engine-execute-skill-with-retries mock-execute-skill-with-retries))
 
 ;; Tests
 
@@ -206,10 +165,14 @@
                      "enqueue-job! must resolve a real {:job-id :status} map, not the bare status-write result")
                  (let [status (runner/runner-status)]
                    (is (= 1 (:queued status)))
-                   (is (= 1 (count (:enqueue-calls @mock-queue-state))))
                    (is (some #(= "queued" (:status %))
-                            (:status-updates @mock-graph-state)))
-                   (done))))
+                            (:status-updates @mock-graph-state))))
+                 ;; create_job enqueues, and start-runner! re-enqueues every job-status:: queued page
+                 (runner/enqueue-job! "Jobs/Test Job")))
+        (.then (fn [_]
+                 (is (= 1 (:queued (runner/runner-status)))
+                     "enqueueing an already-queued job must not queue it twice")
+                 (done)))
         (.catch (fn [err]
                   (is false (str "Should not fail: " err))
                   (done))))))
@@ -339,8 +302,9 @@
                  ;; Wait for async execution to settle
                  (js/setTimeout
                   (fn []
-                    (is (pos? (count (:dequeue-calls @mock-queue-state))))
                     (is (= 0 (:queued (runner/runner-status))))
+                    (is (some #(= "completed" (:status %)) (:status-updates @mock-graph-state))
+                        "the dequeued job was actually executed")
                     ;; Clean up the polling timer scheduled by poll-tick!
                     (runner/stop-runner!)
                     (done))
@@ -352,7 +316,6 @@
 (deftest test-dependency-resolution
   (async done
     (setup-enqueue-mocks!)
-    (set! runner/queue-dequeue mock-dequeue)
 
     (swap! mock-graph-state assoc-in [:jobs "Jobs/Job1"]
            (make-mock-job "Jobs/Job1" "Skills/Skill1" {} 3 #{}))
@@ -362,14 +325,16 @@
     (-> (runner/enqueue-job! "Jobs/Job1")
         (.then (fn [_] (runner/enqueue-job! "Jobs/Job2")))
         (.then (fn [_]
-                 ;; Mark Job1 as completed
-                 (swap! runner/runner-state assoc-in [:completed "Jobs/Job1"] {:result "ok"})
-                 ;; Try to dequeue - should get Job2 now
-                 (let [queue (get @runner/runner-state :queue)
-                       status-map (runner/build-status-map)
-                       eligible (mock-dequeue queue status-map 3 #{})]
-                   (is (= "Jobs/Job2" (:job-id eligible)))
-                   (done))))
+                 (let [[first-out q] (queue/dequeue (:queue @runner/runner-state)
+                                                    (runner/build-status-map) 3 #{})
+                       [blocked _] (queue/dequeue q (runner/build-status-map) 3 #{})]
+                   (is (= "Jobs/Job1" (:job-id first-out)))
+                   (is (nil? blocked) "Job2 waits while Job1 is not completed")
+                   ;; Mark Job1 as completed
+                   (swap! runner/runner-state assoc-in [:completed "Jobs/Job1"] {:result "ok"})
+                   (let [[eligible _] (queue/dequeue q (runner/build-status-map) 3 #{})]
+                     (is (= "Jobs/Job2" (:job-id eligible)))))
+                 (done)))
         (.catch (fn [err]
                   (is false (str "Should not fail: " err))
                   (done))))))

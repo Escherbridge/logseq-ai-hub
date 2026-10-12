@@ -335,3 +335,35 @@ describe("session_archive", () => {
     expect(result.content[0].text).toContain("not found");
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Schema validation, through a real MCP client (handler calls above skip it)
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("session context over MCP", () => {
+  test("an unknown context key is rejected instead of silently dropped", async () => {
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+    const { server, sessionStore } = setup();
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverSide);
+    const client = new Client({ name: "probe", version: "1" });
+    await client.connect(clientSide);
+
+    const refused = (await client.callTool({
+      name: "session_create",
+      arguments: { name: "s", context: { goal: "ship it" } },
+    })) as { isError?: boolean; content: { text: string }[] };
+    expect(refused.isError).toBe(true);
+    expect(refused.content[0].text).toContain("goal");
+    expect(sessionStore.list("claude-code").length).toBe(0);
+
+    const created = (await client.callTool({
+      name: "session_create",
+      arguments: { name: "s", context: { focus: "ship it" } },
+    })) as { isError?: boolean; content: { text: string }[] };
+    expect(created.isError).toBeFalsy();
+    expect(JSON.parse(created.content[0].text).context.focus).toBe("ship it");
+    await client.close();
+  });
+});

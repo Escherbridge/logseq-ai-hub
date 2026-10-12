@@ -33,11 +33,12 @@ export function registerPrompts(server: McpServer): void {
 
 Use the skill_create tool to create it. The skill should have:
 - A clear, descriptive name (kebab-case)
-- An appropriate type (automation, query, transform, notification)
+- A type: llm-chain, tool-chain, composite or mcp-tool
 - A detailed description
 - Well-defined inputs and outputs
+- Ordered steps (e.g. an llm-call step whose prompt_template uses {{input-name}} and {{step-1-result}})
 
-First use skill_list to see existing skills for naming conventions, then create the skill.`,
+First use skill_list to see existing skills for naming conventions, then create the skill. Run it with job_create (type autonomous, skill Skills/<name>, input {...}).`,
           },
         },
       ],

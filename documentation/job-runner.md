@@ -70,7 +70,7 @@ Jobs are prioritized by their `job-priority` property (1=highest, 5=lowest, defa
 
 - **Dependency resolution** — `job-depends-on` property lists other job IDs that must complete first
 - **Concurrency limits** — configurable max concurrent jobs (default: 3)
-- **Deduplication** — prevents the same job from being queued twice
+- **Deduplication** — a job is never queued twice, and never queued while it is running
 
 ## MCP Client
 
@@ -128,7 +128,7 @@ skill-outputs:: summary
 skill-version:: 1
 ```
 
-Add steps as child blocks:
+Add steps either as child blocks of the properties block, or as top-level blocks after it (the layout a page made through the API ends up with). A step block is one with a `step-action::` property line. When the properties block has step children, those are the steps. Otherwise the steps are the later top-level step blocks. Other blocks, such as a note nested under the properties block or the log lines the runner appends, are ignored. Log lines never contain `::`; the runner collapses it to `:` so a logged error cannot read back as a property or a step.
 ```
 step-order:: 1
 step-action:: graph-query
@@ -153,6 +153,43 @@ job-input:: {"query": "today's notes"}
 job-max-retries:: 3
 job-created-at:: 2026-02-19T10:00:00.000Z
 ```
+
+`job-skill` may also be written as a link, `[[Skills/summarize]]`. The brackets are stripped before the skill page is read.
+
+### Creating skills and jobs over MCP
+
+`skill_create` (bridge op `create_skill`) writes the skill page and its steps in one call. `type` must be one of `llm-chain`, `tool-chain`, `composite`, `mcp-tool`. Each entry in `steps` becomes one top-level block, written in `order`:
+
+```json
+{"name": "summarize", "type": "llm-chain", "description": "Summarizes a topic",
+ "inputs": ["topic"], "outputs": ["summary"],
+ "steps": [{"order": 1, "action": "llm-call", "model": "llm-model",
+            "prompt_template": "Summarize {{topic}}"}]}
+```
+
+Step keys: `order` (integer, required), `action` (one of the action types above, required), and optionally `prompt_template`, `model`, `config` (object, stored as JSON), `mcp_server`, `mcp_tool`. The camelCase spellings the REST route sends (`promptTemplate`, `mcpServer`, `mcpTool`) are accepted too. The prompt template is written last in the block, so it may span several lines. An invalid type, an invalid action or a missing order rejects the whole call before anything is written, and so does a `Skills/<name>` page that already has content. The result is `{skillId, name, steps}`, where `steps` is the number of steps written.
+
+#### Model override for `llm-call`
+
+A step's `model` (`step-model::`) picks the model in one of two ways:
+
+| `step-model` | What is called |
+|---|---|
+| absent | the `llm-model` handler with the **LLM Model** setting |
+| a registered handler id: `llm-model`, `mock-model`, `reverse-model` | that handler (`llm-model` uses the **LLM Model** setting) |
+| anything else, e.g. `anthropic/claude-sonnet-4` | the `llm-model` handler, with that string sent as the request's `model` to the configured endpoint |
+
+#### Job types: what runs when
+
+`job_create` (bridge op `create_job`) requires `type` to be one of `autonomous`, `manual`, `scheduled`, `event-driven`. It rejects a `Jobs/<name>` page that already has content; use `job_start` to run an existing job again.
+
+| `type` | On create | Page `job-status` | Result `status` |
+|---|---|---|---|
+| `autonomous`, `event-driven` | enqueued; the runner starts it on its next poll | `queued` | `queued` |
+| `manual` | nothing runs until `job_start` (or `/job:run`) | `draft` | `created` |
+| `scheduled` | its cron `schedule` is registered with the scheduler; nothing runs now. Each match creates an instance page `Jobs/<name>-<YYYYMMDD-HHMM>` and enqueues that | `draft` | `scheduled` |
+
+A scheduled job needs a valid 5-field cron `schedule`, or the call rejects before writing anything. `job_start` on a job that is already running does nothing and returns `status: "running"`; it never starts a second concurrent run.
 
 ### 3. Run It
 

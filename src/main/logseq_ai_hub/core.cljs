@@ -216,7 +216,7 @@
         (.catch (fn [err]
                   (js/console.error "LLM command error:" err)
                   (js/logseq.Editor.insertBlock block-uuid
-                    (str "Error: " (if (instance? js/Error err) (.-message err) (str err)))))))))
+                    (agent/failure-display-text err)))))))
 
 (defn main []
   (js/console.log "Loaded Logseq AI Hub Plugin")

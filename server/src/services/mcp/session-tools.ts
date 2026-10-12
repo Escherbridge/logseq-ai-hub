@@ -46,8 +46,9 @@ export function registerSessionTools(server: McpServer, getContext: () => McpToo
           relevant_pages: z.array(z.string()).optional(),
           working_memory: workingMemoryInputSchema,
         })
+        .strict()
         .optional()
-        .describe("Initial session context"),
+        .describe("Initial session context. Unknown keys are rejected; free-form notes go in working_memory"),
     },
     async (params) => {
       const store = getStore();
@@ -115,7 +116,8 @@ export function registerSessionTools(server: McpServer, getContext: () => McpToo
             })
             .optional(),
         })
-        .describe("Context updates to merge"),
+        .strict()
+        .describe("Context updates to merge. Unknown keys are rejected"),
     },
     async (params) => {
       const store = getStore();

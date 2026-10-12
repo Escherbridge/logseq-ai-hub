@@ -112,12 +112,20 @@
 
 (defn on-new-message-handler
   "Finds all enabled tasks with :trigger :on-new-message and runs them
-   with the message as trigger data."
+   with the message as trigger data. A failed run is shown as an error toast
+   (no block to write into). Returns a Promise settling when all runs have."
   [message]
-  (doseq [task (list-tasks)]
-    (when (and (:enabled task)
-               (= :on-new-message (:trigger task)))
-      (run-task! (:id task) message))))
+  (js/Promise.all
+   (clj->js
+    (for [task (list-tasks)
+          :when (and (:enabled task) (= :on-new-message (:trigger task)))]
+      (-> (run-task! (:id task) message)
+          (.catch (fn [error]
+                    (js/logseq.UI.showMsg
+                     (str "Task " (name (:id task)) " failed: "
+                          (if (instance? js/Error error) (.-message error) (str error)))
+                     "error")
+                    nil)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Slash Commands

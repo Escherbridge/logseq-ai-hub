@@ -71,3 +71,53 @@ dropped, uuids stringified), and its Editor methods return the plugin API's
 shapes. Queries in `graph_ops.cljs` are therefore parsed and executed for real in
 `graph_ops_test.cljs`, not matched against hand-written results. Mocks with the
 wrong shape are how the namespace-stripping bug once shipped.
+
+## job-runner-shape
+
+`parser/parse-job-definition` and `parse-skill-definition` return
+`{:job-id|:skill-id, :properties {...}, :steps [...], :valid ...}`, but the runner
+(`(:job-skill job-def)`, `(:job-status ...)`) and the bridge's list/get handlers read
+properties as flat keys. Because of that mismatch every job failed with "Job missing
+skill reference" and `job_get`/`skill_get` returned blanks. Other consumers expect the
+nested map (`registry/scanner` reads `[:properties :skill-description]`, and
+`scheduler` copes with both). `job_runner/graph.cljs` `read-job-page` and
+`read-skill-page` therefore return `(merge (:properties d) d)`, which has the flat keys
+and keeps `:properties`, so every consumer works. The same functions handle the two
+page layouts. A step block has a `step-action::` line. Steps are the first block's step
+children when it has any (a nested note does not count). Otherwise they are the later
+top-level step blocks, which is how pages built with
+`createPage(..., {createFirstBlock false})` + `appendBlockInPage` (as `create_skill`
+writes them) end up. Runner log lines, also top-level blocks, are skipped, and
+`append-job-log!` collapses `::` to `:` so a logged error can never read back as a step. `job-skill`
+written as `[[Skills/x]]` is reduced to `Skills/x`. `job_flow_test.cljs` covers this end
+to end on the fake host. Reverting either the merge or the layout rule turns it red.
+
+Property values are parsed by their schema type (`parser/parse-value`). Only `:csv` keys
+(`skill-inputs/outputs/tags`, `job-depends-on`, and the registry's `prompt-arguments`)
+become vectors. `:string` keys stay text even when they contain commas or start with `[`.
+The parser used to split any value containing a comma, so an LLM reply with a comma read
+back from `job-result` as a list, and registry descriptions with commas failed validation.
+Registry parsers pass their own schema as the second argument.
+
+## job-runner-queue
+
+`queue.cljs` is pure: `enqueue` returns a new queue and `dequeue` returns
+`[entry remaining]`. The runner used to treat it as mutable. It dropped `enqueue`'s
+return value and took `poll-tick!`'s `[entry q]` vector for an entry, so a queued job
+never ran. The test mocks were mutable too, which is why the suite stayed green. Now
+`runner-state :queue` holds the queue value and is replaced on every
+enqueue/dequeue/remove. `poll-tick!` stores `remaining` and adds the job to `:running`
+before its async page reads. `enqueue-entry!` ignores a job that is already queued,
+because `create_job` enqueues and `start-runner!` re-enqueues every `job-status:: queued`
+page. Running guard: an id in `:running` is never enqueued (`enqueue-entry!` is a no-op
+and `enqueue-job!` resolves `"running"` without rewriting `job-status`) and never dequeued
+(`queue/job-eligible?`), so a `start_job` that lands mid-run cannot start a second
+concurrent run (`job_flow_test/start-job-during-a-run-does-not-run-it-twice`).
+The queue fns default to `queue/*`, and tests use the real ones.
+`job_flow_test/queued-job-runs-through-the-poll-loop` covers the path from `create_job`
+to `completed` without calling `execute-job!`.
+
+Failures stay failures. A skill with no steps rejects in `engine/execute-skill`, and the
+LLM handler (`agent/make-llm-handler`) rejects. It used to resolve an "⚠️ Error…" string,
+so llm-call steps completed. `/LLM` still shows that text through
+`agent/failure-display-text`. `job-error` holds the error's `:message`, not a printed map.

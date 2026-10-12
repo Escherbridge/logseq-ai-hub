@@ -49,3 +49,25 @@ describe("loadConfig().baseUrl", () => {
     expect(loadConfig().baseUrl).toBe("");
   });
 });
+
+describe("parseHttpAllowlist", () => {
+  const { parseHttpAllowlist } = require("../src/config") as typeof import("../src/config");
+
+  test.each([
+    [undefined, []],
+    ["", []],
+    ["[]", []],
+    ['["api.github.com", "*.stripe.com"]', ["api.github.com", "*.stripe.com"]],
+    ["api.github.com, *.stripe.com", ["api.github.com", "*.stripe.com"]],
+  ])("%p -> %p", (raw, expected) => {
+    expect(parseHttpAllowlist(raw as string | undefined)).toEqual(expected as string[]);
+  });
+
+  // A typo must stop the server, not quietly mean "any host".
+  test.each([['["api.github.com"'], ['"api.github.com"'], ['[1, 2]'], ['{"host": "a.com"}'], ["api github com"]])(
+    "%p is rejected",
+    (raw) => {
+      expect(() => parseHttpAllowlist(raw)).toThrow(/HTTP_ALLOWLIST/);
+    },
+  );
+});

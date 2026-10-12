@@ -3,6 +3,7 @@
    Verifies that *emit-event-fn* is called at each lifecycle point
    with the correct event type, source, and data."
   (:require [cljs.test :refer-macros [deftest is testing async]]
+            [logseq-ai-hub.job-runner.queue :as queue]
             [logseq-ai-hub.job-runner.runner :as runner]
             [logseq-ai-hub.util.errors :as errors]))
 
@@ -53,15 +54,6 @@
   (swap! mock-graph-state update :log-entries conj {:page page-name :text text})
   (js/Promise.resolve nil))
 
-(defn- mock-make-queue []
-  {:items (atom [])})
-
-(defn- mock-enqueue [queue entry]
-  (swap! (:items queue) conj entry))
-
-(defn- mock-remove-from-queue [queue id]
-  (swap! (:items queue) (fn [items]
-                          (vec (remove #(= (:job-id %) id) items)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Mock Engine
@@ -87,9 +79,13 @@
   (set! runner/graph-update-job-status! mock-update-job-status!)
   (set! runner/graph-update-job-property! mock-update-job-property!)
   (set! runner/graph-append-job-log! mock-append-job-log!)
-  (set! runner/queue-make-queue mock-make-queue)
-  (set! runner/queue-enqueue mock-enqueue)
-  (set! runner/queue-remove-from-queue mock-remove-from-queue)
+  ;; real pure queue fns: they have no I/O, and runner-state owns the queue value
+  (set! runner/queue-make-queue queue/make-queue)
+  (set! runner/queue-enqueue queue/enqueue)
+  (set! runner/queue-dequeue queue/dequeue)
+  (set! runner/queue-remove-from-queue queue/remove-from-queue)
+  (set! runner/queue-queue-size queue/queue-size)
+  (set! runner/queue-find-in-queue queue/find-in-queue)
   (set! runner/engine-execute-skill-with-retries mock-execute-skill)
   (set! runner/*emit-event-fn* mock-emit-fn)
   (runner/reset-runner!))

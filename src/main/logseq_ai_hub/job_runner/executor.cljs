@@ -41,15 +41,11 @@
 (defn- interpolate-config
   "Interpolates all string values in step config using context."
   [config context]
-  (let [interpolation-context (merge
-                                 (:variables context)
-                                 (:inputs context)
-                                 (:step-results context))]
-    (into {}
-      (for [[k v] config]
-        [k (if (string? v)
-             (interpolation/interpolate v interpolation-context)
-             v)]))))
+  (into {}
+    (for [[k v] config]
+      [k (if (string? v)
+           (interpolation/interpolate v context)
+           v)])))
 
 (defn- get-step-result
   "Gets a result from a previous step by reference like 'step-1-result'."
@@ -78,17 +74,19 @@
       (js/logseq.DB.datascriptQuery query))))
 
 (defn- llm-call-executor
+  "step-model is a registered handler id (llm-model, mock-model, ...) or a provider
+   model name such as anthropic/claude-sonnet-4, sent through the LLM handler."
   [step context]
   (let [template (:step-prompt-template step)
-        model (or (:step-model step)
-                 (.-selectedModel (.-settings js/logseq)))
-        interpolation-context (merge
-                               (:variables context)
-                               (:inputs context)
-                               (:step-results context))
-        prompt (interpolation/interpolate template interpolation-context)
-        process-fn (or *agent-process-input-fn* agent/process-input)]
-    (process-fn prompt model)))
+        step-model (some-> (:step-model step) str str/trim not-empty)
+        model (or step-model
+                  (some-> js/logseq.settings (aget "selectedModel"))
+                  "llm-model")
+        prompt (interpolation/interpolate template context)]
+    (cond
+      *agent-process-input-fn* (*agent-process-input-fn* prompt model)
+      (and step-model (not (agent/get-model step-model))) (agent/llm-handler prompt step-model)
+      :else (agent/process-input prompt model))))
 
 (defn- block-insert-executor
   [step context]

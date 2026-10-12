@@ -210,16 +210,10 @@ export function registerEventTools(server: McpServer, getContext: () => McpToolC
         };
       }
 
-      // Allowlist check
-      const allowlist = ctx.config.httpAllowlist;
-      if (!allowlist || allowlist.length === 0) {
-        return {
-          content: [{ type: "text" as const, text: "Error: No URLs allowed. Configure HTTP_ALLOWLIST environment variable with comma-separated domains." }],
-          isError: true as const,
-        };
-      }
+      // Allowlist check — empty means unrestricted, matching the plugin's httpAllowlist setting
+      const allowlist = ctx.config.httpAllowlist ?? [];
       const hostname = parsed.hostname;
-      const allowed = allowlist.some((pattern) => {
+      const allowed = allowlist.length === 0 || allowlist.some((pattern) => {
         if (pattern.startsWith("*.")) {
           const suffix = pattern.slice(1); // ".example.com"
           return hostname.endsWith(suffix);

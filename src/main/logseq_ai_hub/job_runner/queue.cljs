@@ -21,17 +21,19 @@
   (vec (sort compare-jobs (conj queue job-entry))))
 
 (defn- job-eligible?
-  "Returns true if job is eligible to run based on dependencies and concurrency limits."
+  "True when the job is not already running, its dependencies are met, and there is capacity."
   [job status-map max-concurrent running-set]
-  (let [deps-met? (or (empty? (:depends-on job))
+  (let [not-running? (not-any? #(= % (:job-id job)) running-set)
+        deps-met? (or (empty? (:depends-on job))
                       (every? #(= :completed (get status-map %))
                               (:depends-on job)))
         under-limit? (< (count running-set) max-concurrent)]
-    (and deps-met? under-limit?)))
+    (and not-running? deps-met? under-limit?)))
 
 (defn dequeue
   "Returns [next-eligible-entry remaining-queue] or [nil queue] if none eligible.
   A job is eligible if:
+  - Its :job-id is not in running-set
   - Its :depends-on set is empty OR all dependencies have :completed status in status-map
   - The running-set count is less than max-concurrent
   Returns the highest-priority eligible job."

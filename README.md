@@ -203,7 +203,7 @@ Set the same token in both the server `.env` file and the plugin settings within
 | `AGENT_REQUEST_TIMEOUT` | No | `30000` | LLM request timeout (ms) |
 | `SESSION_MESSAGE_LIMIT` | No | `50` | Max messages per agent session |
 | `EVENT_RETENTION_DAYS` | No | `30` | Days to retain events before purging |
-| `HTTP_ALLOWLIST` | No | `[]` | JSON array of allowed outbound domains |
+| `HTTP_ALLOWLIST` | No | `[]` | JSON array of allowed outbound domains for `http_request`; empty allows any host |
 | `LIST_LIMIT_MAX` | No | `100` | Max items in list responses |
 | `WEBHOOK_SECRET` | No | -- | Secret for webhook signature validation |
 | `WHATSAPP_VERIFY_TOKEN` | No | -- | WhatsApp webhook verification token |

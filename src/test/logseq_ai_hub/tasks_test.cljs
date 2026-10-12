@@ -404,6 +404,29 @@
            (done))
          100)))))
 
+(deftest test-on-new-message-handler-surfaces-a-failed-run
+  ;; agent/process-input rejects on an LLM failure; a message-triggered task has no
+  ;; block to write into, so the failure becomes an error toast, not an unhandled rejection.
+  (setup-mocks!)
+  (async done
+    (let [toasts (atom [])]
+      (aset js/logseq "UI" #js {:showMsg (fn [message status] (swap! toasts conj [message status]))})
+      (set! agent/process-input
+            (fn [_input _model-id] (js/Promise.reject (js/Error. "Upstream overloaded"))))
+      (tasks/register-task! {:id :summarize-incoming
+                             :name "Summarize incoming"
+                             :steps [{:action :ai-process}]
+                             :trigger :on-new-message
+                             :enabled true})
+      (-> (tasks/on-new-message-handler {:id 1 :content "Test" :platform "whatsapp"})
+          (.then (fn [_]
+                   (is (= [["Task summarize-incoming failed: Upstream overloaded" "error"]] @toasts))
+                   (is (empty? (:running @tasks/state)) "the failed task is no longer marked running")
+                   (done)))
+          (.catch (fn [err]
+                    (is false (str "on-new-message-handler rejected: " err))
+                    (done)))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Init Tests
 ;; ---------------------------------------------------------------------------

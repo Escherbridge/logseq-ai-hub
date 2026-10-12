@@ -101,7 +101,12 @@
   (let [start-time (js/Date.now)
         ctx (make-context job-id inputs)
         steps (:steps skill-def)]
-    (-> (run-steps steps ctx on-progress)
+    (-> (if (empty? steps)
+          (js/Promise.reject
+           (errors/make-error :skill-invalid
+                              (str "Skill " (or (:skill-id skill-def) "(unnamed)")
+                                   " has no steps; add step blocks with step-order and step-action properties")))
+          (run-steps steps ctx on-progress))
         (.then (fn [final-ctx]
                  (let [duration (- (js/Date.now) start-time)
                        last-step-order (apply max (map :step-order steps))

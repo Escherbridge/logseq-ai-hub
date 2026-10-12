@@ -1,6 +1,7 @@
 (ns logseq-ai-hub.job-runner.runner
   "Job runner core with queue management, polling, and job lifecycle."
   (:require [logseq-ai-hub.util.errors :as errors]
+            [logseq-ai-hub.job-runner.queue :as queue]
             [clojure.string :as str]))
 
 ;; Forward declarations for module dependencies
@@ -15,12 +16,14 @@
 
 (def ^:dynamic engine-execute-skill-with-retries nil)
 
-(def ^:dynamic queue-make-queue nil)
-(def ^:dynamic queue-enqueue nil)
-(def ^:dynamic queue-dequeue nil)
-(def ^:dynamic queue-remove-from-queue nil)
-(def ^:dynamic queue-queue-size nil)
-(def ^:dynamic queue-find-in-queue nil)
+;; Pure queue fns: they return a new queue value, which runner-state owns.
+;; See src/main/logseq_ai_hub/AGENTS.md §job-runner-queue.
+(def ^:dynamic queue-make-queue queue/make-queue)
+(def ^:dynamic queue-enqueue queue/enqueue)
+(def ^:dynamic queue-dequeue queue/dequeue)
+(def ^:dynamic queue-remove-from-queue queue/remove-from-queue)
+(def ^:dynamic queue-queue-size queue/queue-size)
+(def ^:dynamic queue-find-in-queue queue/find-in-queue)
 
 ;; Event emission (wired to publish/publish-to-server! during init)
 (def ^:dynamic *emit-event-fn* nil)
@@ -49,7 +52,7 @@
 
 (defonce runner-state
   (atom {:status :stopped  ;; :stopped | :running
-         :queue nil  ;; priority queue (will be initialized)
+         :queue []  ;; queue value, replaced on every enqueue/dequeue/remove
          :running #{}  ;; set of currently running job IDs
          :completed {}  ;; job-id -> result
          :failed {}  ;; job-id -> error
@@ -63,12 +66,11 @@
 (defn reset-runner!
   "Resets runner state to initial values. Used for testing."
   []
-  (let [queue (if queue-make-queue
-                (queue-make-queue)
-                {:items (atom [])})]  ;; Fallback for testing
+  (let [timer-id (:timer-id @runner-state)]
+    (when timer-id (js/clearTimeout timer-id))
     (reset! runner-state
             {:status :stopped
-             :queue queue
+             :queue (queue-make-queue)
              :running #{}
              :completed {}
              :failed {}
@@ -86,10 +88,9 @@
 (defn runner-status
   "Returns current runner status with queue and job counts."
   []
-  (let [s @runner-state
-        queue-size-fn (or queue-queue-size (fn [q] (count @(:items q))))]
+  (let [s @runner-state]
     {:status (:status s)
-     :queued (queue-size-fn (:queue s))
+     :queued (queue-queue-size (:queue s))
      :running (count (:running s))
      :completed (count (:completed s))
      :failed (count (:failed s))}))
@@ -119,13 +120,32 @@
      (into {} (map (fn [[id _]] [id :completed]) (:completed s)))
      (into {} (map (fn [[id _]] [id :failed]) (:failed s))))))
 
+(defn- enqueue-entry!
+  "Stores entry in runner-state's queue unless that job is already queued or running.
+   Returns :running when the job is mid-run (nothing changed), else :queued."
+  [entry]
+  (let [job-id (:job-id entry)
+        [before _] (swap-vals! runner-state
+                               (fn [s]
+                                 (if (or (contains? (:running s) job-id)
+                                         (queue-find-in-queue (:queue s) job-id))
+                                   s
+                                   (update s :queue queue-enqueue entry))))]
+    (if (contains? (:running before) job-id) :running :queued)))
+
+(defn- unqueue-job!
+  "Drops job-id from runner-state's queue."
+  [job-id]
+  (swap! runner-state update :queue queue-remove-from-queue job-id))
+
 ;; ---------------------------------------------------------------------------
 ;; Job Lifecycle
 ;; ---------------------------------------------------------------------------
 
 (defn enqueue-job!
   "Enqueues a job for execution.
-   Reads job page, validates it, creates queue entry, and updates status."
+   Reads job page, validates it, creates queue entry, and updates status.
+   A job that is already running is left alone and resolves {:status \"running\"}."
   [job-id]
   (-> (graph-read-job-page job-id)
       (.then (fn [job-def]
@@ -136,15 +156,14 @@
                  (let [queue-entry {:job-id job-id
                                    :priority (or (:job-priority job-def) 3)
                                    :created-at (.toISOString (js/Date.))
-                                   :depends-on (or (:job-depends-on job-def) #{})}
-                       enqueue-fn (or queue-enqueue
-                                     (fn [q entry]
-                                       (swap! (:items q) conj entry)))]
-                   (enqueue-fn (:queue @runner-state) queue-entry)
-                   (emit-lifecycle-event! "job.created" job-id
-                                          {:priority (:priority queue-entry)})
-                   (-> (graph-update-job-status! job-id "queued")
-                       (.then (fn [_] {:job-id job-id :status "queued"})))))))
+                                   :depends-on (or (:job-depends-on job-def) #{})}]
+                   (if (= :running (enqueue-entry! queue-entry))
+                     {:job-id job-id :status "running"}
+                     (do
+                       (emit-lifecycle-event! "job.created" job-id
+                                              {:priority (:priority queue-entry)})
+                       (-> (graph-update-job-status! job-id "queued")
+                           (.then (fn [_] {:job-id job-id :status "queued"})))))))))
       (.catch (fn [err]
                 (js/console.error "Failed to enqueue job:" err)
                 (js/Promise.reject err)))))
@@ -152,24 +171,16 @@
 (defn cancel-job!
   "Cancels a job. Removes from queue and updates status to cancelled."
   [job-id]
-  (let [remove-fn (or queue-remove-from-queue
-                     (fn [q id]
-                       (swap! (:items q) (fn [items]
-                                          (vec (remove #(= (:job-id %) id) items))))))]
-    (remove-fn (:queue @runner-state) job-id)
-    (swap! runner-state update :running disj job-id)
-    (emit-lifecycle-event! "job.cancelled" job-id)
-    (graph-update-job-status! job-id "cancelled")))
+  (unqueue-job! job-id)
+  (swap! runner-state update :running disj job-id)
+  (emit-lifecycle-event! "job.cancelled" job-id)
+  (graph-update-job-status! job-id "cancelled"))
 
 (defn pause-job!
   "Pauses a job. Removes from queue and updates status to paused."
   [job-id]
-  (let [remove-fn (or queue-remove-from-queue
-                     (fn [q id]
-                       (swap! (:items q) (fn [items]
-                                          (vec (remove #(= (:job-id %) id) items))))))]
-    (remove-fn (:queue @runner-state) job-id)
-    (graph-update-job-status! job-id "paused")))
+  (unqueue-job! job-id)
+  (graph-update-job-status! job-id "paused"))
 
 (defn resume-job!
   "Resumes a paused job. Re-enqueues it."
@@ -179,6 +190,14 @@
 ;; ---------------------------------------------------------------------------
 ;; Job Execution
 ;; ---------------------------------------------------------------------------
+
+(defn- error-text
+  "Readable text for a structured error map, a js/Error, or anything else."
+  [err]
+  (cond
+    (and (map? err) (:message err)) (str (:message err))
+    (instance? js/Error err) (.-message err)
+    :else (str err)))
 
 (defn execute-job!
   "Executes a job by:
@@ -247,22 +266,22 @@
                        ;; Failed
                        (swap! runner-state update :failed assoc job-id result)
                        (emit-lifecycle-event! "job.failed" job-id
-                                              {:error (str (:error result))
+                                              {:error (error-text (:error result))
                                                :failed-step (:failed-step result)})
                        (graph-update-job-status! job-id "failed")
                        (graph-update-job-property! job-id "job-completed-at" completed-at)
                        (graph-update-job-property! job-id "job-error"
-                                                  (str (:error result)))
+                                                  (error-text (:error result)))
                        (graph-append-job-log! job-id
-                                             (str "Job failed: " (:error result))))))))
+                                             (str "Job failed: " (error-text (:error result)))))))))
         (.catch (fn [err]
                   (js/console.error "Job execution error:" err)
                   (swap! runner-state update :failed assoc job-id {:error err})
                   (emit-lifecycle-event! "job.failed" job-id
-                                         {:error (str err)})
+                                         {:error (error-text err)})
                   (graph-update-job-status! job-id "failed")
-                  (graph-update-job-property! job-id "job-error" (str err))
-                  (graph-append-job-log! job-id (str "Job failed with error: " err))))
+                  (graph-update-job-property! job-id "job-error" (error-text err))
+                  (graph-append-job-log! job-id (str "Job failed with error: " (error-text err)))))
         (.finally (fn []
                     ;; Always remove from running set
                     (swap! runner-state update :running disj job-id))))))
@@ -282,29 +301,19 @@
     (let [state @runner-state
           status-map (build-status-map)
           max-concurrent (get-in state [:config :max-concurrent])
-          running-set (:running state)
-          dequeue-fn (or queue-dequeue
-                        (fn [queue status-map max-concurrent running-set]
-                          (let [items @(:items queue)
-                                eligible (first (filter
-                                                 (fn [entry]
-                                                   (and
-                                                    (not (contains? running-set (:job-id entry)))
-                                                    (not (contains? status-map (:job-id entry)))
-                                                    (every? #(= :completed (get status-map %))
-                                                           (:depends-on entry))))
-                                                 items))]
-                            (when eligible
-                              (swap! (:items queue)
-                                    (fn [items]
-                                      (vec (remove #(= (:job-id %) (:job-id eligible)) items)))))
-                            eligible)))]
+          running-set (:running state)]
 
       ;; Try to dequeue if we have capacity
       (when (< (count running-set) max-concurrent)
-        (when-let [eligible (dequeue-fn (:queue state) status-map max-concurrent running-set)]
-          ;; Execute job asynchronously (don't await)
-          (execute-job! (:job-id eligible))))
+        (let [[eligible remaining] (queue-dequeue (:queue state) status-map
+                                                  max-concurrent running-set)]
+          (when eligible
+            ;; Store the remaining queue and claim the slot before the async page reads
+            (swap! runner-state #(-> %
+                                     (assoc :queue remaining)
+                                     (update :running conj (:job-id eligible))))
+            ;; Execute job asynchronously (don't await)
+            (execute-job! (:job-id eligible)))))
 
       ;; Schedule next tick
       (let [interval (get-in state [:config :poll-interval-ms])
@@ -323,15 +332,11 @@
                  ;; Enqueue jobs that are in queued status
                  (doseq [job-def job-defs]
                    (when (= :queued (:job-status job-def))
-                     (let [enqueue-fn (or queue-enqueue
-                                         (fn [q entry]
-                                           (swap! (:items q) conj entry)))
-                           queue-entry {:job-id (:job-id job-def)
-                                       :priority (or (:job-priority job-def) 3)
-                                       :created-at (or (:job-created-at job-def)
+                     (enqueue-entry! {:job-id (:job-id job-def)
+                                      :priority (or (:job-priority job-def) 3)
+                                      :created-at (or (:job-created-at job-def)
                                                       (.toISOString (js/Date.)))
-                                       :depends-on (or (:job-depends-on job-def) #{})}]
-                       (enqueue-fn (:queue @runner-state) queue-entry))))
+                                      :depends-on (or (:job-depends-on job-def) #{})})))
 
                  ;; Start polling
                  (swap! runner-state assoc :status :running)

@@ -3,6 +3,9 @@
    Dispatches operations to job runner modules and sends results back via callback."
   (:require [logseq-ai-hub.job-runner.runner :as runner]
             [logseq-ai-hub.job-runner.graph :as graph]
+            [logseq-ai-hub.job-runner.cron :as cron]
+            [logseq-ai-hub.job-runner.scheduler :as scheduler]
+            [logseq-ai-hub.job-runner.schemas :as schemas]
             [logseq-ai-hub.mcp.client :as mcp-client]
             [logseq-ai-hub.secrets :as secrets]
             [logseq-ai-hub.memory :as memory]
@@ -53,6 +56,79 @@
 ;; Operation Handlers
 ;; =============================================================================
 
+(def ^:private job-types #{"autonomous" "manual" "scheduled" "event-driven"})
+(def ^:private skill-types #{"llm-chain" "tool-chain" "composite" "mcp-tool"})
+(def ^:private step-actions (set (map clojure.core/name schemas/step-action-types)))
+
+(defn- reject [message] (js/Promise.reject (js/Error. message)))
+
+(defn- step-problem
+  "nil when a create_skill step map (string keys) is writable, else why not."
+  [i step]
+  (let [order (get step "order")
+        action (get step "action")]
+    (cond
+      (not (map? step)) (str "step " (inc i) " must be an object")
+      (not (integer? order)) (str "step " (inc i) " needs an integer \"order\"")
+      (not (contains? step-actions action))
+      (str "step " (inc i) " has invalid action " (pr-str action)
+           "; expected one of " (str/join ", " (sort step-actions))))))
+
+(def ^:private camel-step-keys
+  {"promptTemplate" "prompt_template" "mcpServer" "mcp_server" "mcpTool" "mcp_tool"})
+
+(defn- normalize-step-keys
+  "Renames the camelCase step keys the REST route sends to the snake_case ones MCP sends."
+  [step]
+  (reduce-kv (fn [s camel snake]
+               (if (and (contains? s camel) (not (contains? s snake)))
+                 (-> s (assoc snake (get s camel)) (dissoc camel))
+                 s))
+             step
+             camel-step-keys))
+
+(defn step-block-content
+  "Block content for one create_skill step; the prompt template goes last because it may span lines."
+  [step]
+  (let [step (normalize-step-keys step)
+        config (get step "config")]
+    (->> [(str "step-order:: " (get step "order"))
+          (str "step-action:: " (get step "action"))
+          (when-let [m (get step "model")] (str "step-model:: " m))
+          (when-let [s (get step "mcp_server")] (str "step-mcp-server:: " s))
+          (when-let [t (get step "mcp_tool")] (str "step-mcp-tool:: " t))
+          (when (some? config) (str "step-config:: " (js/JSON.stringify (clj->js config))))
+          (when-let [p (get step "prompt_template")] (str "step-prompt-template:: " p))]
+         (remove nil?)
+         (str/join "\n"))))
+
+(defn- page-has-content?
+  "Promise<boolean>: true when page-name has at least one non-blank block."
+  [page-name]
+  (-> (js/logseq.Editor.getPageBlocksTree page-name)
+      (.then (fn [blocks]
+               (boolean (some #(not (str/blank? (.-content %))) (array-seq (or blocks #js []))))))))
+
+(defn- job-problem
+  "nil when a create_job type/schedule pair is acceptable, else why not."
+  [job-type schedule]
+  (cond
+    (not (contains? job-types job-type))
+    (str "Invalid job type " (pr-str job-type) "; expected one of " (str/join ", " (sort job-types)))
+
+    (and (= "scheduled" job-type) (not (cron/parse-cron schedule)))
+    (str "A scheduled job needs a 5-field cron \"schedule\"; got " (pr-str schedule))))
+
+(defn- start-new-job!
+  "Promise<status string>. Only autonomous and event-driven jobs run on create; a
+   scheduled job is registered with the scheduler; a manual job waits for start_job."
+  [page-name job-type schedule]
+  (case job-type
+    ("autonomous" "event-driven") (.then (runner/enqueue-job! page-name) (fn [result] (:status result)))
+    "scheduled" (do (scheduler/register-schedule! page-name schedule)
+                    (js/Promise.resolve "scheduled"))
+    (js/Promise.resolve "created")))
+
 (defn- handle-create-job [params]
   (let [name (get params "name")
         job-type (get params "type")
@@ -62,21 +138,27 @@
         input (get params "input")
         page-name (str "Jobs/" name)
         properties (cond-> {:job-type job-type
-                            :job-status "queued"
+                            :job-status (if (#{"autonomous" "event-driven"} job-type) "queued" "draft")
                             :job-priority priority
                             :job-created-at (.toISOString (js/Date.))}
                      skill (assoc :job-skill skill)
                      schedule (assoc :job-schedule schedule)
                      input (assoc :job-input (js/JSON.stringify (clj->js input))))]
-    (-> (js/logseq.Editor.createPage page-name
-          (clj->js (into {} (map (fn [[k v]] [(clojure.core/name k) v]) properties)))
-          (clj->js {:createFirstBlock false}))
-        (.then (fn [_page]
-                 (-> (runner/enqueue-job! page-name)
-                     (.then (fn [_]
-                              {:jobId page-name :name name :status "queued"})))))
-        (.catch (fn [err]
-                  (js/Promise.reject (str "Failed to create job: " (.-message err))))))))
+    (if-let [problem (job-problem job-type schedule)]
+      (reject problem)
+      (-> (page-has-content? page-name)
+          (.then (fn [exists?]
+                   (if exists?
+                     (reject (str "Job page already exists: " page-name
+                                  "; use start_job to run it again, or choose another name"))
+                     (-> (js/logseq.Editor.createPage page-name
+                           (clj->js (into {} (map (fn [[k v]] [(clojure.core/name k) v]) properties)))
+                           (clj->js {:createFirstBlock false}))
+                         (.then (fn [_page] (start-new-job! page-name job-type schedule)))
+                         (.then (fn [status] {:jobId page-name :name name :status status}))))))
+          (.catch (fn [err]
+                    (reject (str "Failed to create job: "
+                                 (if (map? err) (:message err) (.-message err))))))))))
 
 (defn- handle-list-jobs [params]
   (let [prefix (or (aget js/logseq.settings "jobPagePrefix") "Jobs/")
@@ -84,7 +166,7 @@
     (-> (graph/scan-job-pages prefix)
         (.then (fn [job-defs]
                  (let [filtered (if status-filter
-                                  (filter #(= (name (:job-status %)) status-filter) job-defs)
+                                  (filter #(= (some-> (:job-status %) name) status-filter) job-defs)
                                   job-defs)
                        limit (or (get params "limit") 50)
                        offset (or (get params "offset") 0)
@@ -124,8 +206,8 @@
   (let [job-id (get params "jobId")
         full-id (if (str/starts-with? job-id "Jobs/") job-id (str "Jobs/" job-id))]
     (-> (runner/enqueue-job! full-id)
-        (.then (fn [_]
-                 {:jobId full-id :status "queued"})))))
+        (.then (fn [result]
+                 {:jobId full-id :status (:status result)})))))
 
 (defn- handle-cancel-job [params]
   (let [job-id (get params "jobId")
@@ -143,8 +225,8 @@
   (let [job-id (get params "jobId")
         full-id (if (str/starts-with? job-id "Jobs/") job-id (str "Jobs/" job-id))]
     (-> (runner/resume-job! full-id)
-        (.then (fn [_]
-                 {:jobId full-id :status "queued"})))))
+        (.then (fn [result]
+                 {:jobId full-id :status (:status result)})))))
 
 (defn- handle-list-skills [_params]
   (let [prefix (or (aget js/logseq.settings "skillPagePrefix") "Skills/")]
@@ -177,20 +259,46 @@
                     :version (:skill-version skill-def)}
                    (js/Promise.reject (str "Skill not found: " skill-id))))))))
 
+(defn- append-blocks-in-order
+  "Appends each content string as a top-level block, one after another."
+  [page-name contents]
+  (reduce (fn [chain content]
+            (-> chain
+                (.then (fn [_] (js/logseq.Editor.appendBlockInPage page-name content)))
+                (.then (fn [block]
+                         (when-not block
+                           (throw (js/Error. (str "Could not append a step block to " page-name))))
+                         block))))
+          (js/Promise.resolve nil)
+          contents))
+
 (defn- handle-create-skill [params]
   (let [name (get params "name")
         skill-type (get params "type")
         description (get params "description")
+        steps (vec (sort-by #(get % "order") (or (get params "steps") [])))
+        problem (or (when-not (contains? skill-types skill-type)
+                      (str "Invalid skill type " (pr-str skill-type) "; expected one of "
+                           (str/join ", " (sort skill-types))))
+                    (some identity (map-indexed step-problem (or (get params "steps") []))))
         page-name (str "Skills/" name)]
-    (-> (js/logseq.Editor.createPage page-name
-          (clj->js {"skill-type" skill-type
-                    "skill-description" description
-                    "skill-version" "1"
-                    "skill-inputs" (str/join ", " (or (get params "inputs") []))
-                    "skill-outputs" (str/join ", " (or (get params "outputs") []))})
-          (clj->js {:createFirstBlock false}))
-        (.then (fn [_page]
-                 {:skillId page-name :name name})))))
+    (if problem
+      (reject (str "Cannot create skill: " problem))
+      (-> (page-has-content? page-name)
+          (.then (fn [exists?]
+                   (if exists?
+                     (reject (str "Skill page already exists: " page-name))
+                     (-> (js/logseq.Editor.createPage page-name
+                           (clj->js {"skill-type" skill-type
+                                     "skill-description" description
+                                     "skill-version" "1"
+                                     "skill-inputs" (str/join ", " (or (get params "inputs") []))
+                                     "skill-outputs" (str/join ", " (or (get params "outputs") []))})
+                           (clj->js {:createFirstBlock false}))
+                         (.then (fn [_page]
+                                  (append-blocks-in-order page-name (map step-block-content steps))))
+                         (.then (fn [_]
+                                  {:skillId page-name :name name :steps (count steps)}))))))))))
 
 (defn- handle-list-mcp-servers [_params]
   (if mcp-client/list-servers
