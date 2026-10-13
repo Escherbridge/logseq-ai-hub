@@ -30,6 +30,11 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
     webhookSecret: "",
     llmHttpReferer: "",
     llmTitle: "",
+    llmExtraHeaders: {},
+    llmRelayTokens: [],
+    llmAllowedModels: [],
+    llmRelayTimeoutSeconds: 110,
+    llmConfigErrors: [],
     // "" so callers fall back to their own http://localhost:${port} default
     // (see tests/mcp-transport.test.ts, which asserts exactly that fallback).
     baseUrl: "",

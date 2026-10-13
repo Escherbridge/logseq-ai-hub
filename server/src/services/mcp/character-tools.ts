@@ -15,6 +15,7 @@ import {
   deleteRelationship,
 } from "../../db/character-relationships";
 import { runCharacterTurn } from "../character-runtime";
+import { hasLlmCredentials } from "../../config";
 
 function resolve(ctx: McpToolContext, id: string) {
   return getCharacter(ctx.db, id) ?? getCharacterByName(ctx.db, id);
@@ -162,7 +163,7 @@ export function registerCharacterTools(server: McpServer, getContext: () => McpT
     },
     async ({ id, eventType, payload, source, sessionId }) => {
       const ctx = getContext();
-      if (!ctx.config.llmApiKey) return err("LLM API key not configured");
+      if (!hasLlmCredentials(ctx.config)) return err("LLM API key not configured");
       const character = resolve(ctx, id);
       if (!character) return err(`Character "${id}" not found`);
 

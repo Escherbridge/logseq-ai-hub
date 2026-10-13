@@ -212,6 +212,9 @@ Set the same token in both the server `.env` file and the plugin settings within
 | `TELEGRAM_BOT_TOKEN` | No | -- | Telegram bot token |
 | `LLM_HTTP_REFERER` | No | -- | HTTP-Referer header for OpenRouter ranking |
 | `LLM_TITLE` | No | -- | X-Title header for OpenRouter ranking |
+| `LLM_RELAY_TOKENS` | No | -- | Comma-separated relay-only tokens (≥16 chars), one per user. Accepted **only** by `/api/llm/*` — see [Organisation LLM gateways](#organisation-llm-gateways) |
+| `LLM_ALLOWED_MODELS` | No | -- | Comma-separated model ids the relay may request; empty allows any |
+| `LLM_EXTRA_HEADERS` | No | `{}` | JSON object of extra headers for your LLM gateway, e.g. `{"api-key":"..."}` for Azure OpenAI. Counts as credentials, so `LLM_API_KEY` may be empty |
 
 ### Plugin Settings
 
@@ -226,6 +229,9 @@ Configure these in Logseq under **Settings > Plugin Settings > Logseq AI Hub**:
 | LLM API Key | Your LLM provider API key | -- |
 | LLM API Endpoint | LLM API URL | `https://openrouter.ai/api/v1` |
 | LLM Model Name | Model identifier | `anthropic/claude-sonnet-4` |
+| LLM Transport | How LLM requests leave Logseq: `direct`, `logseq-desktop` or `hub-server` — see [Organisation LLM gateways](#organisation-llm-gateways) | `direct` |
+| LLM Relay Token | Relay-only token for `hub-server`, issued by your admin | -- |
+| LLM Extra Headers | JSON object of extra headers for your gateway; values may use `{{secret.KEY}}` | `{}` |
 | Page Reference Link Depth | Levels of `[[links]]` to follow for context | `0` |
 | Page Reference Max Tokens | Token budget for injected page context | `8000` |
 | Enable Job Runner | Toggle the job runner system | `false` |
@@ -245,6 +251,27 @@ Configure these in Logseq under **Settings > Plugin Settings > Logseq AI Hub**:
 | HTTP Allowlist | JSON array of allowed outbound domains | `[]` |
 | Event Retention Days | Days before auto-pruning events | `30` |
 | Persist Events to Graph | Write events to Logseq pages | `true` |
+
+### Organisation LLM gateways
+
+`/LLM`, `[[MCP/...]]` tool use and job `llm-call` steps work with any OpenAI-compatible endpoint: OpenRouter, LiteLLM, Portkey, Cloudflare AI Gateway, Azure OpenAI's `/openai/v1` API, or an in-house proxy. The plugin runs in a browser frame, so with the default transport the endpoint must answer CORS preflights. Most internal gateways don't. **LLM Transport** picks who makes the request:
+
+| LLM Transport | Who calls the endpoint | CORS | Where the credentials live |
+|---|---|---|---|
+| `direct` (default) | the plugin, with the browser's `fetch` | endpoint must allow it | plugin settings |
+| `logseq-desktop` | the Logseq desktop app's main process (`logseq.Request`) | does not apply | plugin settings |
+| `hub-server` | your AI Hub server, via `POST /api/llm/chat/completions` | server already allows it | server env (`LLM_ENDPOINT`, `LLM_API_KEY`, `LLM_EXTRA_HEADERS`) |
+
+- **One user, one gateway:** set **LLM API Endpoint** to the gateway's `/v1` base, choose `logseq-desktop`, and put credentials in **LLM API Key** (sent as `Bearer`) or **LLM Extra Headers**. For Azure: `{"api-key": "{{secret.AZURE_KEY}}"}` with the key stored via `/secrets:set`. A header named in **LLM Extra Headers** replaces the default header of the same name, matched case-insensitively.
+- **A whole organisation:** the admin sets `LLM_ENDPOINT` / `LLM_API_KEY` / `LLM_EXTRA_HEADERS` on the AI Hub server once, plus one relay token per user in `LLM_RELAY_TOKENS` (`openssl rand -hex 24` each). Each user picks `hub-server` and sets **Webhook Server URL** and **LLM Relay Token**, leaving **Plugin API Token** empty. The provider key never reaches a user's machine, and the plugin's own key and extra headers are not sent. Clear **LLM Model Name** to use the server's `AGENT_MODEL`, for gateways that accept only their own model aliases. `LLM_ALLOWED_MODELS` caps which models users may request.
+
+> **Never hand out `PLUGIN_API_TOKEN` for LLM access.** It is the server's master credential: it unlocks MCP (read, write and delete across the graph; secrets), messaging and the event stream. The server also sends MCP requests to *every* plugin linked with it, so a shared token lets one colleague run graph tools inside another's Logseq. Relay tokens work only on `/api/llm/*`. A plugin with no Plugin API Token never links to SSE or MCP.
+
+The relay forwards only standard chat fields (`model`, `messages`, `tools`, sampling parameters). It drops `stream`, `n` and gateway-specific overrides such as LiteLLM's `api_base` / `api_key`, caps request bodies at 4 MB, refuses redirects, and redacts its own credentials from anything it returns.
+
+`logseq-desktop` makes the call with Node in Logseq's main process. That bypasses CORS, but it also ignores the OS certificate store and the system proxy: only Logseq's own proxy setting applies. For a gateway behind internal certificates or TLS inspection, use `hub-server`.
+
+`/ai-hub:doctor` checks the credentials over whichever transport is selected. It probes OpenRouter's `/key` (OpenRouter's `/models` accepts any key) and other gateways' `/models`. Under `hub-server` it sends a 1-token test completion, the only probe that exercises the server's own key, and tells apart the hub rejecting your token from the gateway rejecting the server's key.
 
 ---
 
@@ -446,6 +473,7 @@ You can also check `GET /health` on the server directly — it reports whether a
 |---|---|---|
 | `/LLM` inserts **"Error: Empty response from model."** | A reasoning model spent its whole token budget on `reasoning` and returned `content: null`, so there was no final answer to show. | The plugin now surfaces the reasoning text and flags truncated replies. If it persists, shorten the prompt or pick a non-reasoning model in **LLM Model Name**. |
 | `/LLM` reports **401 "Missing Authentication header"** | The API key has leading or trailing whitespace, so the header became `Bearer  sk-…`. | Keys are trimmed automatically now. If it persists, the key itself is wrong or revoked — check **LLM API Key**. |
+| `/LLM` says **"could not reach https://… (Failed to fetch)"** | The endpoint is unreachable, or it is a gateway that sends no CORS headers, so the browser blocks the request before it leaves. | Set **LLM Transport** to `logseq-desktop` (Logseq makes the call) or `hub-server` (your AI Hub server relays it). See [Organisation LLM gateways](#organisation-llm-gateways). |
 | `/LLM` inserts a raw `{"error": …}` blob | The provider rejected the request (bad model name, no credit, empty prompt). | The provider's own message is now surfaced instead of the envelope. Running `/LLM` on an empty block no longer calls the provider at all. |
 | Code changes don't take effect | `main.js` is a build artifact; Logseq runs whatever is on disk. | `npm run verify:fresh` fails when `main.js` is older than `src/main/`. Rebuild with `npx shadow-cljs release app`. |
 | Slash commands do nothing in a release build but work in dev | Advanced compilation renamed a Logseq entity property. | Add the property name to `externs/app.txt`. `.uuid` is already covered — without it, every command breaks. |

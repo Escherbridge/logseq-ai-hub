@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Config } from "../../config";
+import { hasLlmCredentials } from "../../config";
 import type { AgentBridge } from "../../services/agent-bridge";
 import { authenticate, unauthorizedResponse } from "../../middleware/auth";
 import { errorResponse, notFoundResponse } from "../../helpers/responses";
@@ -20,7 +21,7 @@ export async function handleCharacterChat(
 ): Promise<Response> {
   if (!authenticate(req, config)) return unauthorizedResponse();
 
-  if (!config.llmApiKey) {
+  if (!hasLlmCredentials(config)) {
     return errorResponse(503, "LLM API key not configured");
   }
 

@@ -1,9 +1,18 @@
 (ns logseq-ai-hub.llm.enriched-test
-  (:require [cljs.test :refer-macros [deftest is testing async]]
+  (:require [cljs.test :refer-macros [deftest is testing async use-fixtures]]
             [logseq-ai-hub.llm.enriched :as enriched]
             [logseq-ai-hub.agent :as agent]
             [logseq-ai-hub.memory :as memory]
             [clojure.string :as str]))
+
+(def ^:private real-process-input agent/process-input)
+(def ^:private real-process-with-system-prompt agent/process-with-system-prompt)
+
+;; Tests below set! these agent vars; restore them so later namespaces get the real handlers.
+(use-fixtures :each
+  {:after (fn []
+            (set! agent/process-input real-process-input)
+            (set! agent/process-with-system-prompt real-process-with-system-prompt))})
 
 (defn- setup-base-mocks!
   "Sets up base mocks for logseq and agent."

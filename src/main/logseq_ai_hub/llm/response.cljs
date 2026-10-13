@@ -10,21 +10,29 @@
 
 (defn error-message
   "Human-readable message for a non-2xx body. Never echoes a raw JSON envelope:
-   the provider's own `error.message` is the part a user can act on."
+   the provider's own `error.message` is the part a user can act on.
+   A nil status means the transport did not report one (Logseq <= 0.10 host requests)."
   [status body-text]
   (let [parsed (try (js/JSON.parse body-text) (catch :default _ nil))
-        msg    (some-> parsed (aget "error") (aget "message"))]
+        ;; OpenAI shape first, then the plain-string shapes gateways use (Kong/APIM `message`,
+        ;; FastAPI `detail`, `{"error": "..."}`).
+        msg    (some #(when (string? %) %)
+                     [(some-> parsed (aget "error") (aget "message"))
+                      (some-> parsed (aget "error"))
+                      (some-> parsed (aget "message"))
+                      (some-> parsed (aget "detail"))])
+        http   (if (some? status) (str "HTTP " status) "HTTP status not reported")]
     (cond
       (not (str/blank? msg))
-      (str "provider said \"" msg "\" (HTTP " status ")")
+      (str "provider said \"" msg "\" (" http ")")
 
       ;; Not JSON — a short snippet helps (an HTML error page, a proxy notice).
       (and (not (str/blank? body-text))
            (not (str/starts-with? (str/triml body-text) "{")))
-      (str "HTTP " status " — " (subs body-text 0 (min 200 (count body-text))))
+      (str http " — " (subs body-text 0 (min 200 (count body-text))))
 
       :else
-      (str "HTTP " status " with no error message"))))
+      (str http " with no error message"))))
 
 (defn- provider-error
   "The `error.message` carried by a 200 response, or nil."

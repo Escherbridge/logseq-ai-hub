@@ -1,4 +1,5 @@
-import type { Config } from "../config";
+import { hasLlmCredentials, type Config } from "../config";
+import { relayStats } from "./api/llm-relay";
 import type { AgentBridge } from "../services/agent-bridge";
 import { sseManager } from "../services/sse";
 import { getMcpStatus } from "../services/mcp-server";
@@ -8,7 +9,7 @@ const startTime = Date.now();
 
 export function handleHealth(
   _req: Request,
-  _config: Config,
+  config: Config,
   bridge?: AgentBridge,
   _traceId?: string,
   db?: Database,
@@ -45,6 +46,12 @@ export function handleHealth(
       tools: mcpStatus.toolCount,
       resources: mcpStatus.resourceCount,
       prompts: mcpStatus.promptCount,
+    },
+    llmRelay: {
+      configured: hasLlmCredentials(config),
+      requests: relayStats.requests,
+      lastStatus: relayStats.lastStatus,
+      errors: config.llmConfigErrors.length,
     },
     counts,
   });

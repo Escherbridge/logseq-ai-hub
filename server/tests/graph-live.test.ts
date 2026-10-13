@@ -15,6 +15,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { assertPluginCurrent } from "../scripts/mcp-connection";
 
 const live = process.env.LIVE_LOGSEQ === "1";
 const TIMEOUT = 30_000;
@@ -57,19 +58,7 @@ const shape = (outline: string) =>
 describe.skipIf(!live)("graph tools against a live Logseq", () => {
   beforeAll(async () => {
     const { base, token } = connection();
-    const health = await (await fetch(`${base}/health`)).json();
-    if (!health.agentApi?.pluginConnected) {
-      throw new Error(`Plugin not linked to ${base}. Open Logseq (and reload the plugin after a build).`);
-    }
-    // Logseq loads main.js once, so a rebuild is invisible until the plugin reloads.
-    // Results against an older build are meaningless; refuse rather than mislead.
-    const onDisk = readFileSync(join(import.meta.dir, "..", "..", "main.js"), "utf8").match(/^window\.AI_HUB_BUILD="([^"]+)"/)?.[1];
-    if (onDisk && health.agentApi.pluginBuild !== onDisk) {
-      throw new Error(
-        `Logseq is running plugin build ${health.agentApi.pluginBuild ?? "(unstamped)"}, but main.js on disk is ${onDisk}. ` +
-          "Reload the plugin (Settings > Plugins > Logseq AI Hub > reload, or restart Logseq), then re-run.",
-      );
-    }
+    await assertPluginCurrent(base);
     client = new Client({ name: "graph-live-test", version: "1" });
     await client.connect(
       new StreamableHTTPClientTransport(new URL("/mcp", base), {

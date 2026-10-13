@@ -84,6 +84,8 @@ Two traps worth knowing, both already defended in code but still worth checking 
 
 Prefer a non-reasoning model for `/LLM`. Reasoning models can spend their whole token budget on `reasoning` and return `content: null`.
 
+**Organisation gateways and CORS.** If the user's endpoint is an internal gateway (LiteLLM, Azure OpenAI, an API proxy), `/LLM` will report *"could not reach … (Failed to fetch)"* when the gateway sends no CORS headers. Set `llmTransport` to `logseq-desktop` to have the Logseq app make the call, or to `hub-server` to relay through the AI Hub server, which then uses its own `LLM_ENDPOINT` / `LLM_API_KEY` / `LLM_EXTRA_HEADERS` (Phase 5). For gateways that authenticate with a header other than `Authorization: Bearer`, put it in `llmExtraHeaders`, e.g. `{"api-key": "{{secret.AZURE_KEY}}"}`. `/ai-hub:doctor` probes whichever transport is selected. For several users sharing one server, give each a relay-only token (`LLM_RELAY_TOKENS`) for their **LLM Relay Token** setting. Never share `PLUGIN_API_TOKEN`: it unlocks MCP, and the server broadcasts MCP requests to every linked plugin. `bun run test:live` (in `server/`) now also runs `tests/llm-live.test.ts`, a real job through the plugin's configured transport, with the relay counter on `/health` proving which path ran.
+
 ---
 
 ## Phase 5 — Deploy the server (only if needed)

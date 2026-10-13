@@ -4,8 +4,7 @@
    and routes tool calls back to the correct MCP server."
   (:require [logseq-ai-hub.mcp.client :as mcp-client]
             [logseq-ai-hub.registry.bridge :as registry-bridge]
-            [logseq-ai-hub.llm.settings :as llm-settings]
-            [logseq-ai-hub.llm.response :as llm-response]
+            [logseq-ai-hub.llm.transport :as transport]
             [clojure.string :as str]))
 
 (def ^:private max-tool-rounds 10)
@@ -54,29 +53,13 @@
   "Makes a single call to the chat/completions API.
    Returns Promise<parsed-response-map>."
   [messages openai-tools]
-  (let [api-key (llm-settings/api-key)
-        model-name (llm-settings/model)
-        url (llm-settings/chat-completions-url)
-        body (cond-> {:model model-name
-                      :messages messages}
+  (let [model (transport/request-model)
+        body (cond-> {:messages messages}
+               model (assoc :model model)
                (seq openai-tools) (assoc :tools openai-tools))]
-    (if (nil? api-key)
-      (js/Promise.reject (js/Error. "LLM API Key is missing. Check Plugin Settings."))
-      (-> (js/fetch url
-            (clj->js {:method "POST"
-                      :headers {"Content-Type" "application/json"
-                                "Authorization" (str "Bearer " api-key)}
-                      :body (js/JSON.stringify (clj->js body))}))
-          (.then (fn [response]
-                   (if (.-ok response)
-                     (.json response)
-                     (-> (.text response)
-                         (.then (fn [body-text]
-                                  (throw (js/Error.
-                                           (llm-response/error-message
-                                             (.-status response) body-text)))))))))
-          (.then (fn [data]
-                   (js->clj data :keywordize-keys true)))))))
+    (-> (transport/post-chat! body)
+        (.then (fn [data]
+                 (js->clj data :keywordize-keys true))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Tool Execution

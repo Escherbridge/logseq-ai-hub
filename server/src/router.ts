@@ -13,6 +13,7 @@ import { handleTelegramWebhook } from "./routes/webhooks/telegram";
 import { handleEventWebhook, handleEventWebhookVerify } from "./routes/webhooks/event-hub";
 import { handleSSE } from "./routes/events";
 import { handleSendMessage } from "./routes/api/send";
+import { handleLlmChatCompletions, handleLlmModels } from "./routes/api/llm-relay";
 import { handleGetMessages } from "./routes/api/messages";
 import { handleAgentCallback } from "./routes/api/agent-callback";
 import { handleCreateJob, handleListJobs, handleGetJob, handleStartJob, handleCancelJob, handlePauseJob, handleResumeJob } from "./routes/api/jobs";
@@ -127,6 +128,17 @@ export function createRouter(ctx: RouteContext) {
       method: "GET",
       pattern: "/api/messages",
       handler: (req, ctx) => handleGetMessages(req, ctx.config, ctx.db),
+    },
+    // LLM gateway relay (plugin "hub-server" LLM transport)
+    {
+      method: "POST",
+      pattern: "/api/llm/chat/completions",
+      handler: (req, ctx) => handleLlmChatCompletions(req, ctx.config),
+    },
+    {
+      method: "GET",
+      pattern: "/api/llm/models",
+      handler: (req, ctx) => handleLlmModels(req, ctx.config),
     },
     {
       method: "POST",

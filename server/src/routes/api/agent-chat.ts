@@ -1,4 +1,5 @@
 import type { Config } from "../../config";
+import { hasLlmCredentials } from "../../config";
 import type { AgentBridge } from "../../services/agent-bridge";
 import type { SessionStore } from "../../services/session-store";
 import { authenticate, unauthorizedResponse } from "../../middleware/auth";
@@ -31,7 +32,7 @@ export async function handleAgentChat(
 ): Promise<Response> {
   if (!authenticate(req, config)) return unauthorizedResponse();
 
-  if (!config.llmApiKey) {
+  if (!hasLlmCredentials(config)) {
     return errorResponse(503, "LLM API key not configured");
   }
 

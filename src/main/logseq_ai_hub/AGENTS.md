@@ -121,3 +121,66 @@ Failures stay failures. A skill with no steps rejects in `engine/execute-skill`,
 LLM handler (`agent/make-llm-handler`) rejects. It used to resolve an "⚠️ Error…" string,
 so llm-call steps completed. `/LLM` still shows that text through
 `agent/failure-display-text`. `job-error` holds the error's `:message`, not a printed map.
+
+## llm-transport
+
+Every LLM request goes through `llm/transport.cljs`: `/LLM` (`agent/make-llm-handler`), the
+tool-use loop (`llm/tool_use.cljs`) and the doctor's credential probe. A new call site must
+use `post-chat!` / `probe!` rather than its own `js/fetch`, or it ignores `llmTransport`.
+
+`probe!` picks the cheapest request that actually checks credentials. OpenRouter's `/models`
+answers 200 for any key or none, so OpenRouter is probed via `/key`. Other gateways are probed
+via `/models`. `hub-server` sends a 1-token completion: that is the only request that exercises
+the server's own key and the relay's model allowlist.
+
+- **direct** uses the browser's `fetch` from the plugin frame, so the endpoint must answer CORS
+  preflights (OpenRouter does, most org gateways don't). A rejected fetch is reported as
+  "could not reach <origin>" with a pointer to the other two modes, but only for fetch's own
+  connection failure (`network-failure?`). The browser can't tell CORS failures apart from
+  network failures, so the message names both. A `TypeError` from an invalid header is not
+  relabelled.
+- **logseq-desktop** calls `logseq.Request._request`, which runs in Logseq's Electron main
+  process, so CORS does not apply. Two host versions behave differently. Newer Logseq honours
+  `includeResponse` and resolves `{status ok body}`. Logseq 0.10.x ignores it and resolves the
+  bare body for every status. So `host-result` needs positive evidence of success: the array
+  the call must return (`choices` for chat, `data` for `/models`). Without that evidence the
+  call counts as a failure, because gateway errors are often not OpenAI-shaped (Kong/APIM
+  `{"message":…}`, FastAPI `{"detail":…}`) and "no `error` key" would pass them as success.
+  `error-message` reads those shapes too. `body-status` recovers the status from the body's
+  `error.code` (OpenRouter sends `401`, Azure `"401"`), so the doctor's 401/403 branches still
+  fire on 0.10; otherwise it reports "HTTP status not reported". Pass `data`
+  as an object: 0.10 `JSON.stringify`s it itself, so a pre-stringified body would be
+  double-encoded.
+  Network: 0.10.x makes the call with `node-fetch` in the Electron main process. That ignores
+  the OS certificate store and the system/PAC proxy; only Logseq's own proxy setting applies.
+  Gateways behind internal PKI or TLS inspection fail there with a certificate error, which
+  `unreachable` names (`host-tls-or-dns-failure?`) and answers with `hub-server` as the fix. The
+  SDK's `Request` getter always returns a client. So a host that cannot run the request shows
+  up as a `nil` rejection or a `nil` result, and both map to the "needs the desktop app" error.
+  Exposure: Logseq master logs the IPC args (URL, headers including resolved secrets, prompt)
+  to `main.log` whenever a host request rejects. The plugin cannot prevent that. Users who
+  keep gateway secrets in the vault and run a newer Logseq should prefer `hub-server`.
+- **hub-server** POSTs to `<webhookServerUrl>/api/llm/*` with `llmRelayToken`, falling back to
+  the plugin token (token auth mode only — the relay never verifies JWTs). Org users get a
+  relay-only token and leave the Plugin API Token empty. `messaging/init!` links SSE only when
+  that token is set, and a linked plugin receives every MCP request the server broadcasts, so
+  sharing the plugin token across users would let one user's MCP calls run in another's graph. The server holds
+  the upstream URL and credentials (server `routes/AGENTS.md` §llm-relay). The plugin's
+  `llmApiKey` and `llmExtraHeaders` are never sent there, so an org can keep provider keys
+  off users' machines. `request-model` returns nil when 'LLM Model Name' is blank, so the
+  request goes without a `model` and the server's `AGENT_MODEL` applies. Org gateways often
+  accept only their own model aliases.
+- `llmExtraHeaders` resolves `{{secret.KEY}}` from the vault. A missing secret is an error
+  rather than a literal header, and so is a blank value, which would otherwise count as a
+  credential. Headers merge case-insensitively (`merge-headers`), so
+  `authorization` replaces the Bearer default instead of producing two auth headers. When
+  extra headers are set, a blank `llmApiKey` is allowed (Azure's `api-key`).
+- Misconfiguration (bad JSON, missing secret, no server URL, unknown mode) is reported by
+  `config-error` before anything is sent. It never falls back to `direct`.
+- Secrets never reach block text. `unsafe-header` refuses a key or header value with bytes HTTP
+  cannot carry (CR/LF, a zero-width space pasted with a key) *before* sending, because Node's
+  fetch in the Logseq main process quotes a rejected value in its error. `redact-credentials`
+  scrubs the key, the tokens and resolved header values (longest first) from transport errors
+  and provider error bodies as a second line of defence.
+- `/ai-hub:doctor` warns when credentials would cross plain `http://` to a non-loopback host
+  (`cleartext-origin`).

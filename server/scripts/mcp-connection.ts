@@ -14,6 +14,23 @@ export function connection(): { base: string; token: string } {
   return { base: settings.webhookServerUrl, token: settings.pluginApiToken };
 }
 
+/** Throws unless the plugin is linked to `base` and running the main.js build on disk. */
+export async function assertPluginCurrent(base: string): Promise<void> {
+  const health = await (await fetch(`${base}/health`)).json();
+  if (!health.agentApi?.pluginConnected) {
+    throw new Error(`Plugin not linked to ${base}. Open Logseq (and reload the plugin after a build).`);
+  }
+  // Logseq loads main.js once, so a rebuild is invisible until the plugin reloads.
+  // Results against an older build are meaningless; refuse rather than mislead.
+  const onDisk = readFileSync(join(import.meta.dir, "..", "..", "main.js"), "utf8").match(/^window\.AI_HUB_BUILD="([^"]+)"/)?.[1];
+  if (onDisk && health.agentApi.pluginBuild !== onDisk) {
+    throw new Error(
+      `Logseq is running plugin build ${health.agentApi.pluginBuild ?? "(unstamped)"}, but main.js on disk is ${onDisk}. ` +
+        "Reload the plugin (Settings > Plugins > Logseq AI Hub > reload, or restart Logseq), then re-run.",
+    );
+  }
+}
+
 export async function connect(name: string): Promise<Client> {
   const { base, token } = connection();
   const client = new Client({ name, version: "1" });

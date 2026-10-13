@@ -63,6 +63,22 @@
     :title "LLM Model Name"
     :description "The model ID to use (e.g. anthropic/claude-sonnet-4)"
     :default "anthropic/claude-sonnet-4"}
+   {:key "llmTransport"
+    :type "enum"
+    :title "LLM Transport"
+    :description "How LLM requests leave Logseq. 'direct' = the plugin calls the endpoint itself, so the endpoint must allow CORS (OpenRouter does). 'logseq-desktop' = the Logseq desktop app makes the call, so CORS does not apply: use this for an organisation gateway that sends no CORS headers. 'hub-server' = relay through your AI Hub server, which calls its own LLM_ENDPOINT with its own LLM_API_KEY; the key, endpoint and extra headers here are then not used, and a blank 'LLM Model Name' lets the server's AGENT_MODEL choose."
+    :enumChoices ["direct" "logseq-desktop" "hub-server"]
+    :default "direct"}
+   {:key "llmRelayToken"
+    :type "string"
+    :title "LLM Relay Token"
+    :description "For 'hub-server': the relay-only token your admin issued (server LLM_RELAY_TOKENS). It works only for LLM requests. With it you can leave 'Plugin API Token' empty, which keeps this Logseq unlinked from the server's MCP and messaging. When empty, the Plugin API Token is used."
+    :default ""}
+   {:key "llmExtraHeaders"
+    :type "string"
+    :title "LLM Extra Headers"
+    :description "JSON object of extra HTTP headers your gateway needs, e.g. {\"api-key\": \"{{secret.AZURE_KEY}}\"} for Azure OpenAI. Values may reference the Secrets Vault. A header named here replaces the default one of the same name (e.g. Authorization). When set, 'LLM API Key' may be left empty."
+    :default "{}"}
    {:key "pageRefDepth"
     :type "number"
     :title "Page Reference Link Depth"

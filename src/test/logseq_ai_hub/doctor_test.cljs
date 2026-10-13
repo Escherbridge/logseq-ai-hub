@@ -1,9 +1,16 @@
 (ns logseq-ai-hub.doctor-test
   "Drives run-diagnostics! with the host and provider edges stubbed, asserting
    the report a user would actually read."
-  (:require [cljs.test :refer-macros [deftest is testing async]]
+  (:require [cljs.test :refer-macros [deftest is testing async use-fixtures]]
             [clojure.string :as str]
             [logseq-ai-hub.doctor :as doctor]))
+
+(def ^:private saved-logseq (atom nil))
+
+;; setup! replaces js/logseq; restore it so later namespaces never inherit this host.
+(use-fixtures :each
+  {:before (fn [] (reset! saved-logseq (aget js/globalThis "logseq")))
+   :after (fn [] (aset js/globalThis "logseq" @saved-logseq))})
 
 (defn- setup! [settings-map]
   (set! js/logseq #js {:settings (clj->js settings-map)
@@ -20,7 +27,8 @@
               (js/Promise.resolve
                 #js {:ok (:ok hit)
                      :status (:status hit)
-                     :json (fn [] (js/Promise.resolve (clj->js (:body hit {}))))})
+                     :json (fn [] (js/Promise.resolve (clj->js (:body hit {}))))
+                     :text (fn [] (js/Promise.resolve (js/JSON.stringify (clj->js (:body hit {})))))})
               (js/Promise.reject (js/Error. (str "unrouted: " u))))))))
 
 (defn- with-fetch [routes f]

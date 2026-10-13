@@ -10,6 +10,16 @@ interface SSEClient {
 /** Seconds between SSE heartbeats. Bun.serve's idleTimeout is derived from this in src/index.ts. */
 export const HEARTBEAT_SECONDS = 15;
 
+/**
+ * Bun.serve's idleTimeout for a given LLM relay timeout: at least 10s above the relay's own
+ * timeout (so the relay always gets to answer with a clean relay_timeout before Bun drops the
+ * socket out from under it) and at least HEARTBEAT_SECONDS * 8 (so SSE streams never look
+ * idle between heartbeats), capped at Bun's hard maximum of 255s.
+ */
+export function idleTimeoutSeconds(relayTimeoutSeconds: number): number {
+  return Math.min(255, Math.max(HEARTBEAT_SECONDS * 8, relayTimeoutSeconds + 10));
+}
+
 export class SSEManager {
   private clients: Map<string, SSEClient> = new Map();
   private eventId = 0;

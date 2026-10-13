@@ -8,6 +8,8 @@
   (:require [clojure.string :as str]
             [logseq-ai-hub.settings :as plugin-settings]
             [logseq-ai-hub.llm.settings :as llm-settings]
+            [logseq-ai-hub.llm.response :as llm-response]
+            [logseq-ai-hub.llm.transport :as transport]
             [logseq-ai-hub.auth :as auth]))
 
 (def ^:private ok "✅")
@@ -39,41 +41,98 @@
 ;; Probes — each resolves a report line, never rejects
 ;; ---------------------------------------------------------------------------
 
-(defn- probe-llm
-  "Calls GET <endpoint>/models with the configured key: validates the key and
-   the endpoint without spending completion tokens."
-  []
-  (let [key      (llm-settings/api-key)
-        endpoint (llm-settings/endpoint)
-        model    (llm-settings/model)]
-    (if (nil? key)
-      (js/Promise.resolve
-        (line bad "LLM" "no API key. Set Settings → 'LLM API Key'."))
-      (let [started (js/Date.now)]
-        (-> (js/fetch (str endpoint "/models")
-                      (clj->js {:method "GET"
-                                :headers {"Authorization" (str "Bearer " key)}}))
-            (.then (fn [res]
-                     (let [ms (- (js/Date.now) started)]
-                       (cond
-                         (.-ok res)
-                         (line ok "LLM"
-                               (str "key " (mask key) " accepted by " endpoint
-                                    " (" ms "ms). Model: " model))
+(defn- credential-label
+  "What authenticated the probe, masked."
+  [mode]
+  (cond
+    (= "hub-server" mode) (if (llm-settings/relay-token) "relay token" "plugin token")
+    (llm-settings/api-key) (str "key " (mask (llm-settings/api-key)))
+    :else "extra headers"))
 
-                         (contains? #{401 403} (.-status res))
+(defn- hub-own-error
+  "Which of the AI Hub server's own replies `text` is, or nil when the status was relayed
+   from the upstream gateway. Matches the hub's bodies exactly, never the status alone."
+  [status text]
+  (let [body (try (js/JSON.parse text) (catch :default _ nil))
+        hub-error (when (false? (some-> body (aget "success"))) (aget body "error"))]
+    (cond
+      (and (= 503 status) (= "relay_not_configured" (some-> body (aget "error") (aget "type"))))
+      :not-configured
+      (and (= 503 status) (= "relay_misconfigured" (some-> body (aget "error") (aget "type"))))
+      :misconfigured
+      (and (= 401 status) (= "Unauthorized" hub-error)) :token-rejected
+      (and (= 404 status) (= "Not found" hub-error)) :no-relay)))
+
+(defn- probe-llm
+  "Runs transport/probe! over the configured transport and reports what it proved.
+   Free for direct/logseq-desktop; under hub-server it costs one completion token."
+  []
+  (let [mode  (llm-settings/transport)
+        model (transport/request-model)]
+    (if-let [config-error (transport/config-error)]
+      (js/Promise.resolve (line bad "LLM" config-error))
+      (let [started (js/Date.now)
+            target  (transport/describe)]
+        (-> (transport/probe!)
+            (.then (fn [{accepted? :ok :keys [status text checked]}]
+                     (let [ms (- (js/Date.now) started)
+                           hub? (= "hub-server" mode)
+                           hub-error (when hub? (hub-own-error status text))]
+                       (cond
+                         accepted?
+                         (line ok "LLM"
+                               (str (credential-label mode) " accepted by " target
+                                    (when (= :chat checked) ", and the gateway answered a 1-token test completion")
+                                    " (" ms "ms). Model: " (or model "server's AGENT_MODEL")))
+
+                         (= :token-rejected hub-error)
                          (line bad "LLM"
-                               (str "provider rejected the key (" (.-status res)
-                                    "). Check Settings → 'LLM API Key'."))
+                               (str "the AI Hub server rejected this plugin's token (" status "). "
+                                    (if (llm-settings/relay-token)
+                                      "Check 'LLM Relay Token' is one of the server's LLM_RELAY_TOKENS."
+                                      "Check 'Plugin API Token' matches the server's PLUGIN_API_TOKEN.")))
+
+                         (= :not-configured hub-error)
+                         (line bad "LLM"
+                               (str target " has no LLM credentials. Set LLM_API_KEY "
+                                    "(or LLM_EXTRA_HEADERS) on the server."))
+
+                         (= :misconfigured hub-error)
+                         (line bad "LLM"
+                               (str target " has invalid LLM settings, so it disabled LLM — "
+                                    (llm-response/error-message status text)
+                                    ". Fix them on the server (see its startup warnings)."))
+
+                         (= :no-relay hub-error)
+                         (line bad "LLM"
+                               (str target " is not available — the server predates the "
+                                    "LLM relay. Redeploy it, or switch 'LLM Transport'."))
+
+                         (and (= :chat checked) (= 400 status))
+                         (line bad "LLM"
+                               (str "the gateway refused the test completion — "
+                                    (llm-response/error-message status text)
+                                    ". Check 'LLM Model Name' (and the server's LLM_ALLOWED_MODELS)."))
+
+                         (and hub? (contains? #{401 403} status))
+                         (line bad "LLM"
+                               (str "the gateway rejected the AI Hub server's credentials — "
+                                    (llm-response/error-message status text)
+                                    ". Fix LLM_API_KEY / LLM_EXTRA_HEADERS on the server."))
+
+                         (contains? #{401 403} status)
+                         (line bad "LLM"
+                               (str "provider rejected the credentials — "
+                                    (llm-response/error-message status text)
+                                    ". Check Settings → 'LLM API Key' or 'LLM Extra Headers'."))
 
                          :else
                          (line warn "LLM"
-                               (str endpoint " responded HTTP " (.-status res)
-                                    ". The key may still be fine."))))))
+                               (str target " responded "
+                                    (llm-response/error-message status text)
+                                    ". The credentials may still be fine."))))))
             (.catch (fn [e]
-                      (line bad "LLM"
-                            (str "could not reach " endpoint " — " (.-message e)
-                                 ". Check Settings → 'LLM Endpoint'.")))))))))
+                      (line bad "LLM" (str (.-message e) " Check Settings → 'LLM Endpoint' / 'LLM Transport'.")))))))))
 
 (defn- probe-server
   "Calls GET <server>/health and reports whether this plugin is linked to it."
@@ -136,7 +195,12 @@
       (line bad label (str detail " — fix Settings → '" label "'.")))))
 
 (defn- sync-checks []
-  [(check-feature "AI Memory" "memoryEnabled"
+  [(if-let [origin (transport/cleartext-origin)]
+     (line warn "LLM Transport"
+           (str "credentials go to " origin " over plain http. Use https unless that host "
+                "is on a network you trust."))
+     (line ok "LLM Transport" (str (llm-settings/transport) " — no credentials sent over plain http.")))
+   (check-feature "AI Memory" "memoryEnabled"
                   "enabled."
                   "disabled — /ai-memory:* commands are not registered. Enable it, then reload the plugin.")
    (check-feature "Job Runner" "jobRunnerEnabled"

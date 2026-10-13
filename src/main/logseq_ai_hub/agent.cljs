@@ -1,7 +1,7 @@
 (ns logseq-ai-hub.agent
   (:require [clojure.string :as str]
-            [logseq-ai-hub.llm.settings :as llm-settings]
-            [logseq-ai-hub.llm.response :as llm-response]))
+            [logseq-ai-hub.llm.response :as llm-response]
+            [logseq-ai-hub.llm.transport :as transport]))
 
 ;; -----------------------------------------------------------------------------
 ;; Registry
@@ -80,38 +80,22 @@
    (make-llm-handler nil))
   ([system-prompt]
    (fn [input model-id]
-     (let [api-key (llm-settings/api-key)
+     (let [config-error (transport/config-error)
            model-name (if (or (str/blank? model-id) (get-model model-id))
-                        (llm-settings/model)
+                        (transport/request-model)
                         model-id)
-           url (llm-settings/chat-completions-url)
            messages (cond-> []
                       (not (str/blank? system-prompt))
                       (conj {:role "system" :content system-prompt})
                       true
                       (conj {:role "user" :content input}))]
 
-       (if (nil? api-key)
+       (if config-error
          (js/Promise.reject
-          (llm-failure "LLM API Key is missing. Please check Plugin Settings."
-                       "⚠️ **Error**: LLM API Key is missing. Please check Plugin Settings."))
-         (-> (js/fetch url
-                       (clj->js {:method "POST"
-                                 :headers {"Content-Type" "application/json"
-                                           "Authorization" (str "Bearer " api-key)}
-                                 :body (js/JSON.stringify
-                                        (clj->js {:model model-name
-                                                  :messages messages}))}))
-             (.then (fn [response]
-                      (if (.-ok response)
-                        (.json response)
-                        (-> (.text response)
-                            (.then (fn [body]
-                                     (js/console.error "API response body:" body)
-                                     ;; Surface only the provider's own message — the raw
-                                     ;; JSON envelope used to land in the user's graph.
-                                     (throw (js/Error.
-                                              (llm-response/error-message (.-status response) body)))))))))
+          (llm-failure config-error (str "⚠️ **Error**: " config-error)))
+         ;; post-chat! surfaces only the provider's own message — the raw JSON
+         ;; envelope used to land in the user's graph.
+         (-> (transport/post-chat! (cond-> {:messages messages} model-name (assoc :model model-name)))
              (.then (fn [data]
                       (let [{:keys [text error]} (llm-response/extract-text data)]
                         (if error

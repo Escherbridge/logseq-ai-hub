@@ -1,7 +1,7 @@
 import { loadConfig, validateConfig, validateAgentConfig } from "./config";
 import { getDatabase } from "./db/connection";
 import { createRouter } from "./router";
-import { sseManager, HEARTBEAT_SECONDS } from "./services/sse";
+import { sseManager, idleTimeoutSeconds } from "./services/sse";
 import { AgentBridge } from "./services/agent-bridge";
 import { SessionStore } from "./services/session-store";
 import {
@@ -97,8 +97,9 @@ const server = Bun.serve({
   port: config.port,
   fetch: router,
   // Bun closes connections idle for 10s by default, which cut every SSE stream
-  // between 15s heartbeats and made the plugin link flap. Keep it well above the beat.
-  idleTimeout: HEARTBEAT_SECONDS * 8,
+  // between 15s heartbeats and made the plugin link flap. Keep it well above the beat,
+  // and above however long the LLM relay is configured to wait for a slow gateway.
+  idleTimeout: idleTimeoutSeconds(config.llmRelayTimeoutSeconds),
 });
 
 console.log(`Logseq AI Hub server running on port ${server.port}`);
